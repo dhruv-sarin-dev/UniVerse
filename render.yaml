@@ -1,0 +1,47 @@
+/**
+ * Render Blueprint Specification for Uni-Verse
+ * This file allows one-click deployment of the entire stack (FastAPI Backend + React Frontend).
+ */
+services:
+  # Backend API (FastAPI)
+  - type: web
+    name: uni-verse-backend
+    env: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    secretFiles:
+      - key: service-account.json
+        path: /etc/secrets/service-account.json
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+        description: "API Key for Groq Llama3 modeling"
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_SERVER
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: PYTHON_VERSION
+        value: "3.10.0"
+
+  # Frontend (React/Vite)
+  - type: static
+    name: uni-verse-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: uni-verse-backend
+          property: host
