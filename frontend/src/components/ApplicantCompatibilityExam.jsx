@@ -1,41 +1,46 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Brain,
-  Loader2,
-  Send,
-  Sparkles,
+  ArrowRight,
   Code2,
   GitBranch,
   Target,
-  CheckCircle2,
   AlertCircle,
 } from 'lucide-react';
 import API_URL from '../api';
 
+/**
+ * The exam paper itself.
+ *
+ * Three numbered items, each with a category, each answered in a ruled box.
+ * Progress is a marked-off list rather than a row of dots, so the thing you
+ * read is "two of three done", not "two glowing circles". The only thing
+ * drawn in signal is the count still outstanding — the one genuinely
+ * unresolved value on the sheet.
+ *
+ * Generation, validation, submission and the evaluate payload are unchanged.
+ */
+
+const EASE = [0.16, 1, 0.3, 1];
+
 const CATEGORY_CONFIG = {
   Technical: {
     icon: Code2,
-    color: 'from-cyan-400 to-blue-500',
-    bg: 'bg-cyan-500/10',
-    border: 'border-cyan-500/20',
-    label: 'Technical Gap Analysis',
+    label: 'Technical gap analysis',
   },
   Workflow: {
     icon: GitBranch,
-    color: 'from-violet-400 to-purple-500',
-    bg: 'bg-violet-500/10',
-    border: 'border-violet-500/20',
-    label: 'Workflow Alignment',
+    label: 'Workflow alignment',
   },
   Priority: {
     icon: Target,
-    color: 'from-amber-400 to-orange-500',
-    bg: 'bg-amber-500/10',
-    border: 'border-amber-500/20',
-    label: 'Priority Judgment',
+    label: 'Priority judgment',
   },
 };
+
+function Label({ children, className = '' }) {
+  return <span className={`fm-label text-graphite ${className}`}>{children}</span>;
+}
 
 export default function ApplicantCompatibilityExam({
   projectContext,
@@ -131,32 +136,24 @@ export default function ApplicantCompatibilityExam({
   if (phase === 'generating') {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col items-center justify-center min-h-[400px] gap-6"
+        transition={{ duration: 0.4, ease: EASE }}
+        className="border border-ink/20 bg-paper-raised"
       >
-        <div className="relative">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-violet-600/20 to-cyan-600/20 flex items-center justify-center">
-            <Brain className="w-10 h-10 text-violet-400 animate-pulse" />
-          </div>
-          <div className="absolute inset-0 w-20 h-20 rounded-full border-2 border-transparent border-t-cyan-400 animate-spin" />
+        <div className="border-b border-ink/20 px-4 py-2">
+          <Label className="!text-ink">Setting the paper</Label>
         </div>
-        <div className="text-center space-y-2">
-          <h3 className="text-lg font-semibold text-white">Analyzing Compatibility Gaps</h3>
-          <p className="text-sm text-slate-400 max-w-md">
-            Our AI is comparing <span className="text-cyan-400">{projectContext?.name}</span>'s
-            tech requirements against your profile to generate targeted questions...
+        <div className="fm-grid flex min-h-[320px] flex-col items-center justify-center gap-5 p-8 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink/15 border-t-blueprint" />
+          <h3 className="fm-condensed text-2xl font-black uppercase leading-[0.95] tracking-tight text-ink">
+            Reading the gap
+          </h3>
+          <p className="max-w-md text-[15px] leading-relaxed text-graphite">
+            Comparing <span className="font-mono text-[13px] text-blueprint">{projectContext?.name}</span>{' '}
+            against the profile on file to write three questions for this exact pair.
           </p>
-        </div>
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <motion.div
-              key={i}
-              className="w-2 h-2 rounded-full bg-violet-500"
-              animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
-              transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-            />
-          ))}
+          <span className="fm-caret inline-block h-3 w-1.5 bg-ink/60" aria-hidden="true" />
         </div>
       </motion.div>
     );
@@ -166,34 +163,31 @@ export default function ApplicantCompatibilityExam({
   if (phase === 'submitting') {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center justify-center min-h-[400px] gap-6"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: EASE }}
+        className="border border-ink/20 bg-paper-raised"
       >
-        <div className="relative">
-          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-600/20 to-cyan-600/20 flex items-center justify-center">
-            <Sparkles className="w-12 h-12 text-emerald-400" />
-          </div>
-          <motion.div
-            className="absolute inset-[-4px] rounded-full border-2 border-transparent border-t-emerald-400 border-r-cyan-400"
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
-          />
+        <div className="border-b border-ink/20 px-4 py-2">
+          <Label className="!text-ink">Marking</Label>
         </div>
-        <div className="text-center space-y-2">
-          <h3 className="text-xl font-bold text-white">Processing Compatibility...</h3>
-          <p className="text-sm text-slate-400 max-w-sm">
-            Evaluating your answers against project requirements, workflow alignment, and priority fit
+        <div className="fm-grid flex min-h-[320px] flex-col items-center justify-center gap-5 p-8 text-center">
+          <h3 className="fm-condensed text-2xl font-black uppercase leading-[0.95] tracking-tight text-ink">
+            Paper submitted
+          </h3>
+          <p className="max-w-sm text-[15px] leading-relaxed text-graphite">
+            Your answers are being read against the project&apos;s requirements,
+            workflow and priorities.
           </p>
-        </div>
-        {/* Progress bar */}
-        <div className="w-64 h-1.5 bg-white/5 rounded-full overflow-hidden">
-          <motion.div
-            className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full"
-            initial={{ width: '0%' }}
-            animate={{ width: '100%' }}
-            transition={{ duration: 8, ease: 'easeInOut' }}
-          />
+          <div className="h-px w-64 bg-ink/15">
+            <motion.div
+              className="h-full origin-left bg-ink"
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 8, ease: 'easeInOut' }}
+            />
+          </div>
+          <Label className="!text-[10px]">Do not close this sheet</Label>
         </div>
       </motion.div>
     );
@@ -203,19 +197,23 @@ export default function ApplicantCompatibilityExam({
   if (phase === 'error') {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col items-center justify-center min-h-[300px] gap-4"
+        transition={{ duration: 0.4, ease: EASE }}
+        className="border border-signal/40 bg-signal/[0.05] px-6 py-16 text-center"
       >
-        <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center">
-          <AlertCircle className="w-8 h-8 text-red-400" />
-        </div>
-        <p className="text-red-400 text-sm text-center max-w-md">{error}</p>
+        <AlertCircle size={32} className="mx-auto mb-4 text-signal" />
+        <p className="fm-condensed text-2xl font-black uppercase text-ink">
+          Paper could not be set
+        </p>
+        <p className="mx-auto mt-2 max-w-md font-mono text-[13px] leading-relaxed text-graphite">
+          {error}
+        </p>
         <button
           onClick={handleStartExam}
-          className="px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm text-white hover:bg-white/10 transition-all"
+          className="mt-6 border border-ink px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper"
         >
-          Retry
+          Try again
         </button>
       </motion.div>
     );
@@ -225,15 +223,25 @@ export default function ApplicantCompatibilityExam({
   if (phase === 'done') {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="flex flex-col items-center justify-center min-h-[300px] gap-4"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: EASE }}
+        className="border border-ink/20 bg-paper-raised"
       >
-        <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
-          <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+        <div className="border-b border-ink/20 px-4 py-2">
+          <Label className="!text-ink">Receipt</Label>
         </div>
-        <h3 className="text-xl font-bold text-white">Exam Submitted!</h3>
-        <p className="text-sm text-slate-400">Your compatibility report has been sent to the team lead.</p>
+        <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 p-8 text-center">
+          <span className="border border-blueprint px-4 py-1.5">
+            <Label className="!text-blueprint">Filed</Label>
+          </span>
+          <h3 className="fm-condensed mt-2 text-3xl font-black uppercase leading-[0.95] tracking-tight text-ink">
+            Exam submitted
+          </h3>
+          <p className="max-w-sm text-[15px] leading-relaxed text-graphite">
+            Your compatibility report has gone to the team lead.
+          </p>
+        </div>
       </motion.div>
     );
   }
@@ -241,12 +249,13 @@ export default function ApplicantCompatibilityExam({
   // ── Idle (shouldn't show, auto-starts) ─────────────────────────────────
   if (phase === 'idle') {
     return (
-      <div className="flex items-center justify-center min-h-[300px]">
+      <div className="flex min-h-[240px] items-center justify-center">
         <button
           onClick={handleStartExam}
-          className="px-8 py-3 rounded-2xl bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-semibold hover:shadow-lg hover:shadow-violet-500/20 transition-all"
+          className="group relative overflow-hidden bg-ink px-7 py-3 text-[11px] font-semibold uppercase tracking-wider text-paper"
         >
-          Start Compatibility Exam
+          <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+          <span className="relative">Set the paper</span>
         </button>
       </div>
     );
@@ -256,127 +265,162 @@ export default function ApplicantCompatibilityExam({
   const currentQ = questions[activeQuestion];
   const catConfig = CATEGORY_CONFIG[currentQ?.category] || CATEGORY_CONFIG.Technical;
   const CatIcon = catConfig.icon;
+  const answered = questions.filter((q) => answers[q.id]?.trim()).length;
+  const outstanding = questions.length - answered;
+  const currentText = answers[currentQ?.id] || '';
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
-      {/* Header */}
+    <div className="space-y-5">
+      {/* Paper head */}
       <motion.div
-        initial={{ opacity: 0, y: -10 }}
+        initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        transition={{ duration: 0.4, ease: EASE }}
+        className="flex items-baseline justify-between gap-3 border-b border-ink pb-2"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600/30 to-cyan-600/30 flex items-center justify-center">
-            <Brain className="w-5 h-5 text-violet-400" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-white">Compatibility Exam</h2>
-            <p className="text-xs text-slate-500">
-              Tailored for <span className="text-cyan-400">{projectContext?.name}</span>
-            </p>
-          </div>
-        </div>
-        {/* Progress dots */}
-        <div className="flex gap-2">
-          {questions.map((q, i) => (
-            <button
-              key={q.id}
-              onClick={() => setActiveQuestion(i)}
-              className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                i === activeQuestion
-                  ? 'bg-violet-500 scale-125 shadow-lg shadow-violet-500/50'
-                  : answers[q.id]?.trim()
-                  ? 'bg-emerald-500/60'
-                  : 'bg-white/10'
-              }`}
-            />
-          ))}
-        </div>
+        <Label className="!text-ink">
+          Paper — {projectContext?.name || 'project'}
+        </Label>
+        <Label className="!text-[10px]">
+          {answered} of {questions.length} answered
+        </Label>
       </motion.div>
+
+      {/* Marked-off item list */}
+      <ol className="border-b border-rule">
+        {questions.map((q, i) => {
+          const isAnswered = !!answers[q.id]?.trim();
+          const isCurrent = i === activeQuestion;
+          return (
+            <li key={q.id} className="border-t border-rule first:border-t-0">
+              <button
+                type="button"
+                onClick={() => setActiveQuestion(i)}
+                className="group flex w-full items-baseline gap-3 py-2 text-left"
+              >
+                <span
+                  className={`flex h-3.5 w-3.5 shrink-0 translate-y-0.5 items-center justify-center border ${
+                    isAnswered
+                      ? 'border-ink bg-ink'
+                      : isCurrent
+                      ? 'border-blueprint'
+                      : 'border-rule'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {isAnswered && (
+                    <svg viewBox="0 0 10 10" className="h-2 w-2 stroke-paper" fill="none" strokeWidth="1.8">
+                      <path d="M1.5 5.2 L4 7.6 L8.5 2.4" />
+                    </svg>
+                  )}
+                </span>
+                <Label className={`w-7 shrink-0 !text-[10px] ${isCurrent ? '!text-ink' : ''}`}>
+                  {String(i + 1).padStart(2, '0')}
+                </Label>
+                <span
+                  className={`flex-1 truncate font-mono text-[12px] transition-colors ${
+                    isCurrent ? 'text-ink' : 'text-graphite group-hover:text-ink'
+                  }`}
+                >
+                  {q.questionText}
+                </span>
+                <Label className="shrink-0 !text-[10px]">{q.category}</Label>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
 
       {/* Error banner */}
       {error && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          className="px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: EASE }}
+          className="flex items-baseline gap-3 border border-signal/40 bg-signal/[0.05] px-4 py-3"
         >
-          {error}
+          <Label className="!text-signal">Incomplete</Label>
+          <span className="font-mono text-[13px] text-ink">{error}</span>
         </motion.div>
       )}
 
-      {/* Question Card */}
+      {/* Question sheet */}
       <AnimatePresence mode="wait">
-        <motion.div
+        <motion.section
           key={activeQuestion}
-          initial={{ opacity: 0, x: 30 }}
+          initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -30 }}
-          transition={{ duration: 0.25 }}
-          className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm overflow-hidden"
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.25, ease: EASE }}
+          className="border border-ink/20 bg-paper-raised"
         >
-          {/* Category header */}
-          <div
-            className={`px-5 py-3 flex items-center gap-3 ${catConfig.bg} border-b ${catConfig.border}`}
-          >
-            <CatIcon className="w-4 h-4 text-white/60" />
-            <span className="text-xs font-medium text-white/60 tracking-wide uppercase">
-              {catConfig.label}
+          <div className="flex items-baseline justify-between gap-3 border-b border-ink/20 px-4 py-2">
+            <span className="flex items-center gap-2">
+              <CatIcon size={12} className="shrink-0 translate-y-px text-graphite" />
+              <Label className="!text-ink">
+                Item {String(activeQuestion + 1).padStart(2, '0')} — {catConfig.label}
+              </Label>
             </span>
-            <span className="ml-auto text-xs text-white/30">
+            <Label className="whitespace-nowrap !text-[10px]">
               {activeQuestion + 1} / {questions.length}
-            </span>
+            </Label>
           </div>
 
-          {/* Question */}
-          <div className="p-6 space-y-5">
-            <p className="text-[15px] text-slate-200 leading-relaxed">{currentQ?.questionText}</p>
+          <div className="space-y-4 p-4 sm:p-5">
+            <p className="text-[15px] leading-relaxed text-ink">{currentQ?.questionText}</p>
 
-            {/* Answer textarea */}
-            <div className="relative">
+            {/* Ruled answer box */}
+            <div className="border border-ink/25 bg-paper focus-within:border-blueprint">
+              <div className="flex items-baseline justify-between border-b border-ink/15 px-3 py-1.5">
+                <Label className="!text-[10px]">Answer</Label>
+                <Label className="!text-[10px]">{currentText.length} chars</Label>
+              </div>
               <textarea
-                value={answers[currentQ?.id] || ''}
+                value={currentText}
                 onChange={(e) =>
                   setAnswers((prev) => ({ ...prev, [currentQ.id]: e.target.value }))
                 }
-                placeholder="Write your answer here..."
-                rows={5}
-                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/[0.08] text-sm text-white placeholder-slate-600 resize-none focus:ring-2 focus:ring-violet-500/30 focus:border-violet-500/40 transition-all outline-none"
+                placeholder="Write your answer here…"
+                rows={6}
+                className="w-full resize-none bg-transparent px-3 py-2.5 font-mono text-[13px] leading-relaxed text-ink placeholder:text-graphite focus:outline-none"
               />
-              <span className="absolute bottom-3 right-3 text-xs text-slate-600">
-                {(answers[currentQ?.id] || '').length} chars
-              </span>
             </div>
           </div>
-        </motion.div>
+        </motion.section>
       </AnimatePresence>
 
       {/* Navigation + Submit */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 border-t border-ink pt-4">
         <button
           onClick={() => setActiveQuestion((p) => Math.max(0, p - 1))}
           disabled={activeQuestion === 0}
-          className="px-5 py-2.5 rounded-xl border border-white/[0.06] text-sm text-slate-400 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+          className="border border-ink px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink"
         >
-          ← Previous
+          Previous
         </button>
 
-        <div className="flex gap-3">
+        <div className="flex items-center gap-4">
+          {outstanding > 0 && (
+            <Label className="hidden !text-[10px] !text-signal sm:inline">
+              {outstanding} outstanding
+            </Label>
+          )}
           {activeQuestion < questions.length - 1 ? (
             <button
               onClick={() => setActiveQuestion((p) => Math.min(questions.length - 1, p + 1))}
-              className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/[0.08] text-sm text-white hover:bg-white/10 transition-all"
+              className="border border-ink px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper"
             >
-              Next →
+              Next
             </button>
           ) : (
             <button
               onClick={() => { setError(null); handleSubmit(); }}
               disabled={!allAnswered}
-              className="group relative px-7 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-violet-600/25 transition-all flex items-center gap-2"
+              className="group relative flex items-center gap-2 overflow-hidden bg-ink px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-paper disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Send className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-              Submit Exam
+              <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+              <span className="relative">Hand in</span>
+              <ArrowRight size={14} className="relative transition-transform group-hover:translate-x-1" />
             </button>
           )}
         </div>

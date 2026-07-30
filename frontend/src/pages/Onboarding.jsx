@@ -1,8 +1,45 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { Rocket, GraduationCap, Github, Briefcase, Plus, X, LogIn } from 'lucide-react';
+import { Github, Plus, X, LogIn } from 'lucide-react';
 import API_URL from '../api';
+
+/**
+ * Onboarding — the blank enrolment sheet.
+ *
+ * Same record as Profile, filled in for the first time: numbered sections, a
+ * skills list rather than pills, and one filing action at the foot of the
+ * form. Behaviour is untouched — the has_profile redirect, the signed-out
+ * prompt and the submit payload all stay as they were.
+ */
+
+const EASE = [0.16, 1, 0.3, 1];
+
+const FIELD =
+  'w-full border border-ink/25 bg-paper px-3 py-2.5 font-mono text-[13px] text-ink placeholder:text-graphite focus:border-blueprint focus:outline-none';
+
+function Label({ children, className = '' }) {
+  return <span className={`fm-label text-graphite ${className}`}>{children}</span>;
+}
+
+function Panel({ caption, meta, children, delay = 0 }) {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 14 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.15 }}
+      transition={{ duration: 0.45, delay, ease: EASE }}
+      className="border border-ink/20 bg-paper-raised"
+    >
+      <div className="flex items-baseline justify-between gap-3 border-b border-ink/20 px-4 py-2">
+        <Label className="!text-ink">{caption}</Label>
+        {meta && <Label className="whitespace-nowrap !text-[10px]">{meta}</Label>}
+      </div>
+      <div className="space-y-5 p-4 sm:p-5">{children}</div>
+    </motion.section>
+  );
+}
 
 export default function Onboarding() {
   const { user, updateUser, login } = useAuth();
@@ -24,21 +61,35 @@ export default function Onboarding() {
   // Show login prompt for unauthenticated users
   if (!user) {
     return (
-      <div className="pt-32 pb-20 px-4 flex flex-col items-center justify-center min-h-[70vh] relative z-10">
-        <div className="glass-strong rounded-3xl p-12 border border-white/5 max-w-md w-full text-center">
-          <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-neon-purple to-neon-blue flex items-center justify-center mx-auto mb-6">
-            <Rocket size={28} className="text-white" />
+      <div className="mx-auto max-w-3xl px-4 pt-24 pb-20 sm:px-6 sm:pt-28">
+        <div className="flex items-baseline justify-between border-b border-ink pb-2">
+          <Label className="!text-ink">§ Enrolment — new record</Label>
+          <Label>Not signed in</Label>
+        </div>
+
+        <div className="mt-10 border border-ink/20 bg-paper-raised">
+          <div className="border-b border-ink/20 px-4 py-2">
+            <Label className="!text-ink">Authorisation required</Label>
           </div>
-          <h2 className="text-2xl font-outfit font-bold text-white mb-3">Join Uni-Verse</h2>
-          <p className="text-slate-400 text-sm mb-8">
-            Sign in with Google to create your profile and start discovering amazing project teams.
-          </p>
-          <button
-            onClick={login}
-            className="w-full py-4 bg-white text-black font-semibold rounded-full hover:bg-slate-200 transition-colors flex items-center justify-center gap-2 text-sm"
-          >
-            <LogIn size={18} /> Sign in with Google
-          </button>
+          <div className="p-6 sm:p-8">
+            <h2 className="fm-condensed text-4xl font-black uppercase leading-[0.9] tracking-tight text-ink">
+              Join
+              <br />
+              <span className="text-blueprint">Uni-Verse</span>
+            </h2>
+            <p className="mt-3 max-w-sm text-[15px] leading-relaxed text-graphite">
+              Sign in with Google to open a record and start browsing project
+              teams.
+            </p>
+            <button
+              onClick={login}
+              className="group relative mt-8 inline-flex w-full items-center justify-center gap-2 overflow-hidden bg-ink px-7 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-paper sm:w-auto"
+            >
+              <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+              <LogIn size={14} className="relative" />
+              <span className="relative">Sign in with Google</span>
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -75,7 +126,7 @@ export default function Onboarding() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
+
       if (res.ok) {
         // Push skills into context so matchmaking works without reload
         updateUser({ skills, ...formData, has_profile: true });
@@ -89,78 +140,163 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in duration-500 pt-28 pb-20">
-      <div className="w-full max-w-2xl bg-dark-card/95 border border-white/5 p-8 md:p-12 rounded-3xl shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 rounded-full blur-3xl -z-10 pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl -z-10 pointer-events-none"></div>
-        
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 bg-gradient-to-br from-teal-400 to-blue-600 rounded-2xl mx-auto flex items-center justify-center mb-6 shadow-lg shadow-teal-500/20 transform -rotate-6">
-            <Rocket className="text-white" size={32} />
-          </div>
-          <h1 className="text-3xl font-extrabold text-white mb-2">Complete Your Profile</h1>
-          <p className="text-slate-400">Tell us about yourself so we can match you with the perfect projects and teammates.</p>
-        </div>
+    <div className="mx-auto max-w-3xl px-4 pt-24 pb-20 sm:px-6 sm:pt-28">
+      {/* Running head */}
+      <div className="flex items-baseline justify-between border-b border-ink pb-2">
+        <Label className="!text-ink">§ Enrolment — new record</Label>
+        <Label>{user.display_name || 'Applicant'}</Label>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                <Briefcase size={16} className="text-teal-400" /> Branch / Major
+      <div className="pt-8">
+        <h1 className="fm-condensed text-5xl font-black uppercase leading-[0.9] tracking-tight text-ink sm:text-6xl">
+          Complete
+          <br />
+          <span className="text-blueprint">your record</span>
+        </h1>
+        <p className="mt-3 max-w-md text-[15px] leading-relaxed text-graphite">
+          Four sections. What you study, where your code lives, what you can
+          build, and what you are after.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <Panel caption="Section A — Standing">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div>
+              <label htmlFor="ob-branch" className="fm-label mb-1.5 block text-graphite">
+                Branch / major
               </label>
-              <input required type="text" placeholder="e.g. Computer Science" value={formData.branch} onChange={e => setFormData({...formData, branch: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500 transition-colors" />
+              <input
+                id="ob-branch" required type="text" placeholder="e.g. Computer Science"
+                value={formData.branch}
+                onChange={e => setFormData({ ...formData, branch: e.target.value })}
+                className={FIELD}
+              />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-                <GraduationCap size={16} className="text-purple-400" /> Year of Study
+            <div>
+              <label htmlFor="ob-year" className="fm-label mb-1.5 block text-graphite">
+                Year of study
               </label>
-              <select required value={formData.year} onChange={e => setFormData({...formData, year: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-colors appearance-none cursor-pointer">
-                <option value="" disabled className="bg-slate-900">Select Year</option>
-                <option value="1" className="bg-slate-900">1st Year</option>
-                <option value="2" className="bg-slate-900">2nd Year</option>
-                <option value="3" className="bg-slate-900">3rd Year</option>
-                <option value="4" className="bg-slate-900">4th Year</option>
-                <option value="Alumni" className="bg-slate-900">Alumni</option>
+              <select
+                id="ob-year" required value={formData.year}
+                onChange={e => setFormData({ ...formData, year: e.target.value })}
+                className={`${FIELD} cursor-pointer`}
+              >
+                <option value="" disabled>Select year</option>
+                <option value="1">1st year</option>
+                <option value="2">2nd year</option>
+                <option value="3">3rd year</option>
+                <option value="4">4th year</option>
+                <option value="Alumni">Alumni</option>
               </select>
             </div>
           </div>
+        </Panel>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-300 flex items-center gap-2">
-              <Github size={16} className="text-slate-400" /> GitHub URL (Optional)
+        <Panel caption="Section B — Repository" meta="optional" delay={0.05}>
+          <div>
+            <label htmlFor="ob-github" className="fm-label mb-1.5 flex items-center gap-1.5 text-graphite">
+              <Github size={12} /> GitHub URL
             </label>
-            <input type="url" placeholder="https://github.com/username" value={formData.github} onChange={e => setFormData({...formData, github: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-slate-500 transition-colors" />
+            <input
+              id="ob-github" type="url" placeholder="https://github.com/username"
+              value={formData.github}
+              onChange={e => setFormData({ ...formData, github: e.target.value })}
+              className={FIELD}
+            />
+            <p className="mt-2 text-[13px] leading-relaxed text-graphite">
+              Add it now and your commits can be scored later. You can sync your
+              languages into the skills list from your profile at any time.
+            </p>
           </div>
+        </Panel>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-300">Skills</label>
-            <div className="p-3 bg-black/20 border border-white/10 rounded-xl focus-within:border-teal-500 transition-colors min-h-[50px]">
-              <div className="flex flex-wrap gap-2 mb-2">
-                {skills.map(skill => (
-                  <span key={skill} className="flex items-center gap-1.5 px-3 py-1 bg-teal-500/20 text-teal-300 rounded-lg text-sm font-medium border border-teal-500/30">
-                    {skill}
-                    <button type="button" onClick={() => removeSkill(skill)} className="hover:text-teal-100"><X size={14} /></button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <input type="text" placeholder="Add a skill (e.g. React, UX, Python)..." value={skillInput} onChange={e => setSkillInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddSkill(e)} className="flex-1 bg-transparent text-white focus:outline-none text-sm placeholder:text-slate-500" />
-                <button type="button" onClick={handleAddSkill} disabled={!skillInput.trim()} className="text-teal-400 hover:text-teal-300 disabled:opacity-50"><Plus size={20} /></button>
-              </div>
+        <Panel
+          caption="Section C — Skills declared"
+          meta={String(skills.length).padStart(2, '0')}
+          delay={0.1}
+        >
+          <ol className="border-t border-rule">
+            {skills.map((skill, i) => (
+              <li
+                key={skill}
+                className="flex items-baseline gap-3 border-b border-rule py-2"
+              >
+                <Label className="w-7 shrink-0 !text-[10px]">
+                  {String(i + 1).padStart(2, '0')}
+                </Label>
+                <span className="flex-1 font-mono text-[13px] text-ink">{skill}</span>
+                <button
+                  type="button"
+                  onClick={() => removeSkill(skill)}
+                  aria-label={`Remove ${skill}`}
+                  className="shrink-0 text-graphite transition-colors hover:text-signal"
+                >
+                  <X size={13} />
+                </button>
+              </li>
+            ))}
+            {skills.length === 0 && (
+              <li className="border-b border-rule py-2 font-mono text-[13px] text-graphite">
+                — none declared yet
+              </li>
+            )}
+          </ol>
+
+          <div>
+            <label htmlFor="ob-skill" className="fm-label mb-1.5 block text-graphite">
+              Add an entry
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="ob-skill" type="text" placeholder="React, UX, Python…"
+                value={skillInput}
+                onChange={e => setSkillInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddSkill(e)}
+                className={FIELD}
+              />
+              <button
+                type="button"
+                onClick={handleAddSkill}
+                disabled={!skillInput.trim()}
+                aria-label="Add skill"
+                className="shrink-0 border border-ink px-3 text-ink transition-colors hover:bg-ink hover:text-paper disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink"
+              >
+                <Plus size={16} />
+              </button>
             </div>
-            <p className="text-xs text-slate-500">Press Enter to add multiple skills</p>
+            <p className="mt-2">
+              <Label className="!text-[10px]">Press enter to add several</Label>
+            </p>
           </div>
+        </Panel>
 
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-300">Short Bio</label>
-            <textarea required rows="3" placeholder="I am highly passionate about..." value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-teal-500 transition-colors resize-none"></textarea>
+        <Panel caption="Section D — Statement" delay={0.15}>
+          <div>
+            <label htmlFor="ob-bio" className="fm-label mb-1.5 block text-graphite">
+              Short bio
+            </label>
+            <textarea
+              id="ob-bio" required rows="3" placeholder="I am highly passionate about…"
+              value={formData.bio}
+              onChange={e => setFormData({ ...formData, bio: e.target.value })}
+              className={`${FIELD} resize-none`}
+            />
           </div>
+        </Panel>
 
-          <button disabled={loading} type="submit" className="w-full py-4 rounded-xl bg-gradient-to-r from-teal-500 to-blue-600 text-white font-bold shadow-[0_0_20px_rgba(45,212,191,0.2)] hover:shadow-[0_0_30px_rgba(45,212,191,0.4)] transition-all transform hover:-translate-y-1 disabled:opacity-70 disabled:hover:translate-y-0 text-lg flex justify-center items-center gap-2">
-            {loading ? 'Saving Profile...' : 'Complete Setup 🚀'}
+        <div className="flex items-center justify-between gap-4 border-t border-ink pt-5">
+          <Label className="!text-[10px]">Uni-Verse — Field Manual · Rev 02</Label>
+          <button
+            disabled={loading}
+            type="submit"
+            className="group relative overflow-hidden bg-ink px-7 py-3 text-[11px] font-semibold uppercase tracking-wider text-paper disabled:opacity-50"
+          >
+            <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+            <span className="relative">{loading ? 'Filing…' : 'File record'}</span>
           </button>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
 }

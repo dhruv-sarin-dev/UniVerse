@@ -9,7 +9,13 @@
  * Add routes here as each group lands. Once it covers every route, delete this
  * module and the conditionals that use it.
  */
-export const FIELD_MANUAL_ROUTES = ['/', '/discover'];
+export const FIELD_MANUAL_ROUTES = [
+  '/',
+  '/discover',
+  '/profile',
+  '/onboarding',
+  '/compatibility-exam',
+];
 
 export function isFieldManualRoute(pathname) {
   return FIELD_MANUAL_ROUTES.includes(pathname);
