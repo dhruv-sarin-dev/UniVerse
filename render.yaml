@@ -1,7 +1,5 @@
-/**
- * Render Blueprint Specification for Uni-Verse
- * This file allows one-click deployment of the entire stack (FastAPI Backend + React Frontend).
- */
+# Render Blueprint Specification for Uni-Verse
+# One-click deployment of the whole stack (FastAPI backend + React frontend).
 services:
   # Backend API (FastAPI)
   - type: web
@@ -30,6 +28,16 @@ services:
         value: "587"
       - key: PYTHON_VERSION
         value: "3.10.0"
+      # Leave this false until a frontend build that sends the Firebase ID
+      # token is live, then flip it. Turning it on first locks every write
+      # endpoint against the deployed app.
+      - key: REQUIRE_AUTH
+        value: "false"
+      # Comma-separated. Defaults to * — set this to the real frontend origin
+      # once the URL is known.
+      - key: ALLOWED_ORIGINS
+        sync: false
+        description: "e.g. https://uni-verse.vercel.app"
 
   # Frontend (React/Vite)
   - type: static
@@ -40,8 +48,34 @@ services:
     buildCommand: npm install && npm run build
     publishDir: dist
     envVars:
+      # `property: host` yields a bare hostname with no scheme. src/api.js
+      # normalises that to https:// — without it, fetch builds a relative URL
+      # and `new WebSocket()` throws outright, taking the War Room down.
       - key: VITE_API_URL
         fromService:
           type: web
           name: uni-verse-backend
           property: host
+      # Vite inlines these at build time, so they must exist here or the
+      # deployed bundle ships with an unconfigured Firebase and silently
+      # falls back to the mock login path.
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      # Optional. Without a TURN relay, calls fail whenever either peer sits
+      # behind a symmetric NAT (most mobile data, many campus networks).
+      - key: VITE_TURN_URL
+        sync: false
+      - key: VITE_TURN_USERNAME
+        sync: false
+      - key: VITE_TURN_CREDENTIAL
+        sync: false
