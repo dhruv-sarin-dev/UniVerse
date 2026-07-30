@@ -1,10 +1,11 @@
-from fastapi import APIRouter, BackgroundTasks
-from typing import List
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from typing import List, Optional
 from services.email_service import send_email_notification
 from models import ProjectBase
 from database import get_collection, create_document, update_document, get_document
 from pydantic import BaseModel
 from services.team_evaluator import evaluate_team_compatibility
+from services.auth import verified_uid, acting_uid, require_owner
 import json
 import os
 router = APIRouter(prefix="/api/projects", tags=["Projects"])
@@ -96,15 +97,21 @@ def get_single_project(project_id: str):
     return {"success": True, "project": proj}
 
 @router.delete("/{project_id}")
-def delete_project(project_id: str):
+def delete_project(project_id: str, caller: Optional[str] = Depends(verified_uid)):
     from database import delete_document
+    proj = get_document('projects', project_id)
+    if not proj:
+        return {"success": False, "error": "Project not found"}
+    require_owner(proj.get("owner_uid"), caller, "delete this project")
     success = delete_document('projects', project_id)
     if success:
         return {"success": True}
     return {"success": False, "error": "Project not found"}
 
 @router.post("/", response_model=ProjectBase)
-def create_project(project: ProjectBase):
+def create_project(project: ProjectBase, caller: Optional[str] = Depends(verified_uid)):
+    # The owner is whoever is signed in — not whoever the body claims to be.
+    project.owner_uid = acting_uid(caller, project.owner_uid)
     data = project.model_dump(exclude={'id'})
     data['created_at'] = project.created_at.strftime('%Y-%m-%dT%H:%M:%SZ')
     data['members'] = [project.owner_uid]
@@ -117,18 +124,19 @@ def create_project(project: ProjectBase):
     return project
 
 @router.post("/{project_id}/upvote")
-def upvote_project(project_id: str, payload: UpvoteRequest):
+def upvote_project(project_id: str, payload: UpvoteRequest, caller: Optional[str] = Depends(verified_uid)):
+    uid = acting_uid(caller, payload.user_id)
     docs = get_collection('projects')
     for doc in docs:
         if doc.get("id") == project_id:
             upvoted_by = doc.get("upvoted_by", [])
             upvotes = doc.get("upvotes", 0)
-            
-            if payload.user_id in upvoted_by:
-                upvoted_by.remove(payload.user_id)
+
+            if uid in upvoted_by:
+                upvoted_by.remove(uid)
                 upvotes -= 1
             else:
-                upvoted_by.append(payload.user_id)
+                upvoted_by.append(uid)
                 upvotes += 1
                 
             update_document('projects', project_id, {"upvotes": upvotes, "upvoted_by": upvoted_by})
@@ -136,16 +144,17 @@ def upvote_project(project_id: str, payload: UpvoteRequest):
     return {"success": False, "error": "Project not found"}
 
 @router.post("/{project_id}/comments")
-def add_project_comment(project_id: str, payload: CommentRequest):
+def add_project_comment(project_id: str, payload: CommentRequest, caller: Optional[str] = Depends(verified_uid)):
     import uuid
     from datetime import datetime
+    uid = acting_uid(caller, payload.user_id)
     docs = get_collection('projects')
     for doc in docs:
         if doc.get("id") == project_id:
             comments = doc.get("comments", [])
             new_comment = {
                 "id": str(uuid.uuid4()),
-                "user_id": payload.user_id,
+                "user_id": uid,
                 "user_name": payload.user_name,
                 "text": payload.text,
                 "timestamp": datetime.utcnow().isoformat() + "Z"
@@ -156,45 +165,46 @@ def add_project_comment(project_id: str, payload: CommentRequest):
     return {"success": False, "error": "Project not found"}
 
 @router.post("/{project_id}/join")
-def join_project(project_id: str, payload: JoinRequest, background_tasks: BackgroundTasks):
+def join_project(project_id: str, payload: JoinRequest, background_tasks: BackgroundTasks, caller: Optional[str] = Depends(verified_uid)):
+    uid = acting_uid(caller, payload.user_id)
     docs = get_collection('projects')
     for doc in docs:
         if doc.get("id") == project_id:
             members = doc.get("members", [])
             join_requests = doc.get("join_requests", [])
-            
+
             # If they are already a member, they leave
-            if payload.user_id in members:
-                members.remove(payload.user_id)
+            if uid in members:
+                members.remove(uid)
                 update_document('projects', project_id, {"members": members})
                 return {"success": True, "status": "left", "members": members}
             else:
                 # Toggle join request
-                if payload.user_id in join_requests:
-                    join_requests.remove(payload.user_id)
+                if uid in join_requests:
+                    join_requests.remove(uid)
                     # Also remove their compatibility exam data
                     compatibility_exams = doc.get("compatibility_exams", {})
-                    compatibility_exams.pop(payload.user_id, None)
+                    compatibility_exams.pop(uid, None)
                     update_document('projects', project_id, {
                         "join_requests": join_requests,
                         "compatibility_exams": compatibility_exams,
                     })
                     status = "request_cancelled"
                 else:
-                    join_requests.append(payload.user_id)
+                    join_requests.append(uid)
                     status = "requested"
 
                     # Store compatibility exam results if provided
                     update_data = {"join_requests": join_requests}
                     if payload.compatibility_exam:
                         compatibility_exams = doc.get("compatibility_exams", {})
-                        compatibility_exams[payload.user_id] = payload.compatibility_exam
+                        compatibility_exams[uid] = payload.compatibility_exam
                         update_data["compatibility_exams"] = compatibility_exams
 
                     update_document('projects', project_id, update_data)
 
                     from database import get_document
-                    req_user = get_document('users', payload.user_id)
+                    req_user = get_document('users', uid)
                     owner_profile = get_document('users', doc.get("owner_uid"))
                     if owner_profile and req_user and owner_profile.get("email"):
                         score_info = ""
@@ -210,12 +220,14 @@ def join_project(project_id: str, payload: JoinRequest, background_tasks: Backgr
     return {"success": False, "error": "Project not found"}
 
 @router.post("/{project_id}/requests/{user_id}/accept")
-def accept_join_request(project_id: str, user_id: str, background_tasks: BackgroundTasks):
+def accept_join_request(project_id: str, user_id: str, background_tasks: BackgroundTasks, caller: Optional[str] = Depends(verified_uid)):
     from database import get_document
     proj = get_document('projects', project_id)
     if not proj:
         return {"success": False, "error": "Project not found"}
-        
+
+    require_owner(proj.get("owner_uid"), caller, "accept join requests")
+
     members = proj.get("members", [])
     join_requests = proj.get("join_requests", [])
     
@@ -234,12 +246,14 @@ def accept_join_request(project_id: str, user_id: str, background_tasks: Backgro
     return {"success": False, "error": "User not in requests"}
 
 @router.post("/{project_id}/requests/{user_id}/reject")
-def reject_join_request(project_id: str, user_id: str, background_tasks: BackgroundTasks):
+def reject_join_request(project_id: str, user_id: str, background_tasks: BackgroundTasks, caller: Optional[str] = Depends(verified_uid)):
     from database import get_document
     proj = get_document('projects', project_id)
     if not proj:
         return {"success": False, "error": "Project not found"}
-        
+
+    require_owner(proj.get("owner_uid"), caller, "reject join requests")
+
     join_requests = proj.get("join_requests", [])
     
     if user_id in join_requests:
@@ -278,12 +292,16 @@ def get_project_members(project_id: str):
     return {"success": False, "error": "Project not found"}
 
 @router.delete("/{project_id}/members/{user_id}")
-def remove_project_member(project_id: str, user_id: str):
+def remove_project_member(project_id: str, user_id: str, caller: Optional[str] = Depends(verified_uid)):
     from database import get_document, update_document
     proj = get_document('projects', project_id)
     if not proj:
         return {"success": False, "error": "Project not found"}
-        
+
+    # The owner can remove anyone; anyone else can only remove themselves.
+    if caller and caller != user_id:
+        require_owner(proj.get("owner_uid"), caller, "remove other members")
+
     members = proj.get("members", [])
     if user_id in members:
         members.remove(user_id)
@@ -333,21 +351,14 @@ class UpdateProjectGithub(BaseModel):
     github_url: str
 
 @router.put("/{project_id}/github")
-def update_project_github(project_id: str, payload: UpdateProjectGithub):
+def update_project_github(project_id: str, payload: UpdateProjectGithub, caller: Optional[str] = Depends(verified_uid)):
     from database import update_document, get_document
     proj = get_document('projects', project_id)
     if not proj:
         return {"success": False, "error": "Project not found"}
+    require_owner(proj.get("owner_uid"), caller, "change the repository URL")
     update_document('projects', project_id, {"github_url": payload.github_url})
     return {"success": True}
-
-@router.delete("/{project_id}")
-def delete_project(project_id: str):
-    from database import delete_document
-    success = delete_document("projects", project_id)
-    if success:
-        return {"success": True}
-    return {"success": False, "error": "Project not found"}
 
 
 @router.patch("/{project_id}/requirements")
@@ -392,12 +403,15 @@ class GenerateMOMRequest(BaseModel):
     fallback_members: List[str] = []
 
 @router.post("/{project_id}/generate_mom")
-def generate_mom(project_id: str, payload: GenerateMOMRequest, background_tasks: BackgroundTasks):
+def generate_mom(project_id: str, payload: GenerateMOMRequest, background_tasks: BackgroundTasks, caller: Optional[str] = Depends(verified_uid)):
     from services.ai_mom import generate_mom_from_transcripts
     from services.email_service import send_email_notification
     from database import get_document
-    
+
     proj = get_document('projects', project_id)
+    # This mails every member, so only the team itself may trigger it.
+    if proj and caller and caller not in proj.get("members", []):
+        raise HTTPException(status_code=403, detail="Only project members can send minutes")
     if not proj:
         # Instead of failing, utilize the fallback provided by the frontend cache
         print("Project not found in DB or quota exceeded. Using frontend fallback data for emails.")
@@ -422,14 +436,18 @@ def generate_mom(project_id: str, payload: GenerateMOMRequest, background_tasks:
     return {"success": True, "mom": mom_text, "members_notified": members_notified}
 
 @router.post("/{project_id}/notify_meeting")
-def notify_meeting(project_id: str, background_tasks: BackgroundTasks):
+def notify_meeting(project_id: str, background_tasks: BackgroundTasks, caller: Optional[str] = Depends(verified_uid)):
     from database import get_document
     proj = get_document('projects', project_id)
     if not proj:
         print(f"[Notify] Project not found: {project_id}")
         return {"success": False, "error": "Project not found"}
-        
+
     members = proj.get("members", [])
+    # Mails the whole team, so keep it to the team.
+    if caller and caller not in members:
+        raise HTTPException(status_code=403, detail="Only project members can notify a meeting")
+
     members_notified = 0
     print(f"\n[Notify] Starting notification for meeting: {proj.get('title')} (Project ID: {project_id})")
     print(f"[Notify] Scanning {len(members)} total members...")

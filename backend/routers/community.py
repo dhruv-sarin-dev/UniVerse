@@ -1,8 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
 from models import PostBase
 from database import get_collection, create_document, update_document, delete_document, get_document, upsert_document
+from services.auth import verified_uid, acting_uid, require_owner
 
 router = APIRouter(prefix="/api/community", tags=["Community"])
 
@@ -92,7 +93,9 @@ def get_single_post(post_id: str):
 
 
 @router.post("/", response_model=PostBase)
-def create_post(post: PostBase):
+def create_post(post: PostBase, caller: Optional[str] = Depends(verified_uid)):
+    # Author is whoever is signed in, so nobody can post under another name.
+    post.author_uid = acting_uid(caller, post.author_uid)
     data = post.model_dump(exclude={'id'})
     data['created_at'] = post.created_at.strftime('%Y-%m-%dT%H:%M:%SZ')
     data['upvoted_by'] = []
@@ -108,13 +111,14 @@ def create_post(post: PostBase):
 
 # Also support /posts path for backwards compat
 @router.post("/posts", response_model=PostBase)
-def create_post_compat(post: PostBase):
-    return create_post(post)
+def create_post_compat(post: PostBase, caller: Optional[str] = Depends(verified_uid)):
+    return create_post(post, caller)
 
 
 # ── Voting with reputation ──
 @router.post("/{post_id}/vote")
-def vote_post(post_id: str, payload: VoteRequest):
+def vote_post(post_id: str, payload: VoteRequest, caller: Optional[str] = Depends(verified_uid)):
+    uid = acting_uid(caller, payload.user_id)
     docs = get_collection('posts')
     for doc in docs:
         if doc.get("id") == post_id:
@@ -123,20 +127,20 @@ def vote_post(post_id: str, payload: VoteRequest):
             author_uid = doc.get("author_uid", "")
 
             # Calculate old state for reputation delta
-            was_upvoted = payload.user_id in upvoted_by
-            was_downvoted = payload.user_id in downvoted_by
+            was_upvoted = uid in upvoted_by
+            was_downvoted = uid in downvoted_by
 
             # Remove any existing vote first
-            if payload.user_id in upvoted_by:
-                upvoted_by.remove(payload.user_id)
-            if payload.user_id in downvoted_by:
-                downvoted_by.remove(payload.user_id)
+            if uid in upvoted_by:
+                upvoted_by.remove(uid)
+            if uid in downvoted_by:
+                downvoted_by.remove(uid)
 
             # Apply new vote
             if payload.vote == 1:
-                upvoted_by.append(payload.user_id)
+                upvoted_by.append(uid)
             elif payload.vote == -1:
-                downvoted_by.append(payload.user_id)
+                downvoted_by.append(uid)
 
             net_votes = len(upvoted_by) - len(downvoted_by)
             update_document('posts', post_id, {
@@ -146,7 +150,7 @@ def vote_post(post_id: str, payload: VoteRequest):
             })
 
             # Update author reputation
-            if author_uid and author_uid != payload.user_id:
+            if author_uid and author_uid != uid:
                 rep_delta = 0
                 if was_upvoted and payload.vote != 1:
                     rep_delta -= 10  # lost an upvote
@@ -170,23 +174,24 @@ def vote_post(post_id: str, payload: VoteRequest):
 
 # Keep legacy upvote endpoint for backwards compat
 @router.post("/{post_id}/upvote")
-def upvote_post(post_id: str, payload: VoteRequest):
+def upvote_post(post_id: str, payload: VoteRequest, caller: Optional[str] = Depends(verified_uid)):
     payload.vote = 1
-    return vote_post(post_id, payload)
+    return vote_post(post_id, payload, caller)
 
 
 # ── Comments (threaded) ──
 @router.post("/{post_id}/comments")
-def add_comment(post_id: str, payload: CommentRequest):
+def add_comment(post_id: str, payload: CommentRequest, caller: Optional[str] = Depends(verified_uid)):
     import uuid
     from datetime import datetime
+    uid = acting_uid(caller, payload.user_id)
     docs = get_collection('posts')
     for doc in docs:
         if doc.get("id") == post_id:
             comments = doc.get("comments", [])
             new_comment = {
                 "id": str(uuid.uuid4()),
-                "user_id": payload.user_id,
+                "user_id": uid,
                 "user_name": payload.user_name,
                 "user_avatar": payload.user_avatar,
                 "text": payload.text,
@@ -201,7 +206,7 @@ def add_comment(post_id: str, payload: CommentRequest):
             update_document('posts', post_id, {"comments": comments})
 
             # +2 reputation for commenting
-            _update_reputation(payload.user_id, 2)
+            _update_reputation(uid, 2)
 
             return {"success": True, "comment": new_comment}
 
@@ -210,7 +215,8 @@ def add_comment(post_id: str, payload: CommentRequest):
 
 # ── Comment voting ──
 @router.post("/{post_id}/comments/{comment_id}/vote")
-def vote_comment(post_id: str, comment_id: str, payload: VoteRequest):
+def vote_comment(post_id: str, comment_id: str, payload: VoteRequest, caller: Optional[str] = Depends(verified_uid)):
+    uid = acting_uid(caller, payload.user_id)
     docs = get_collection('posts')
     for doc in docs:
         if doc.get("id") == post_id:
@@ -221,13 +227,13 @@ def vote_comment(post_id: str, comment_id: str, payload: VoteRequest):
                     down = comment.get("downvoted_by", [])
                     commenter = comment.get("user_id", "")
 
-                    was_up = payload.user_id in up
-                    was_down = payload.user_id in down
+                    was_up = uid in up
+                    was_down = uid in down
 
-                    if payload.user_id in up: up.remove(payload.user_id)
-                    if payload.user_id in down: down.remove(payload.user_id)
-                    if payload.vote == 1: up.append(payload.user_id)
-                    elif payload.vote == -1: down.append(payload.user_id)
+                    if uid in up: up.remove(uid)
+                    if uid in down: down.remove(uid)
+                    if payload.vote == 1: up.append(uid)
+                    elif payload.vote == -1: down.append(uid)
 
                     comment["upvoted_by"] = up
                     comment["downvoted_by"] = down
@@ -236,7 +242,7 @@ def vote_comment(post_id: str, comment_id: str, payload: VoteRequest):
                     update_document('posts', post_id, {"comments": comments})
 
                     # Reputation for comment author
-                    if commenter and commenter != payload.user_id:
+                    if commenter and commenter != uid:
                         rep = 0
                         if was_up and payload.vote != 1: rep -= 5
                         if was_down and payload.vote != -1: rep += 2
@@ -252,11 +258,12 @@ def vote_comment(post_id: str, comment_id: str, payload: VoteRequest):
 
 # ── Accept answer (StackOverflow style) ──
 @router.post("/{post_id}/accept")
-def accept_answer(post_id: str, payload: AcceptAnswerRequest):
+def accept_answer(post_id: str, payload: AcceptAnswerRequest, caller: Optional[str] = Depends(verified_uid)):
+    uid = acting_uid(caller, payload.user_id)
     doc = get_document("posts", post_id)
     if not doc:
         return {"success": False, "error": "Post not found"}
-    if doc.get("author_uid") != payload.user_id:
+    if doc.get("author_uid") != uid:
         return {"success": False, "error": "Only the author can accept an answer"}
     if doc.get("post_type") != "question":
         return {"success": False, "error": "Only questions can have accepted answers"}
@@ -279,7 +286,7 @@ def accept_answer(post_id: str, payload: AcceptAnswerRequest):
     })
 
     # +25 reputation for having answer accepted
-    if accepted_user and accepted_user != payload.user_id:
+    if accepted_user and accepted_user != uid:
         _update_reputation(accepted_user, 25)
     # If un-accepting the old one, remove rep
     if old_accepted and old_accepted != payload.comment_id:
@@ -347,7 +354,11 @@ def search_posts(q: str = ""):
 
 
 @router.delete("/{post_id}")
-def delete_post(post_id: str):
+def delete_post(post_id: str, caller: Optional[str] = Depends(verified_uid)):
+    doc = get_document("posts", post_id)
+    if not doc:
+        return {"success": False, "error": "Post not found"}
+    require_owner(doc.get("author_uid"), caller, "delete this post")
     success = delete_document("posts", post_id)
     if success:
         return {"success": True}

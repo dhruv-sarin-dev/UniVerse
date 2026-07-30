@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from firebase import init_firebase
@@ -10,10 +12,14 @@ app = FastAPI(title="Uni-Verse API", description="Backend for Uni-Verse team for
 # Initialize Firebase on startup (gracefully falls back to Local JSON persist)
 init_firebase()
 
-# Configure CORS — no credentials (we use JSON not cookies) so wildcard is valid
+# Configure CORS — no credentials (we use JSON not cookies) so wildcard is valid.
+# ALLOWED_ORIGINS (comma-separated) locks this down in production without a
+# code change; it still defaults to "*" so local dev and previews keep working.
+allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
