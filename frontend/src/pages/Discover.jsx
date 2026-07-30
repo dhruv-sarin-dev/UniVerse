@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Rocket, Map, List, Star, Users, ArrowRight, Plus, Trash2 } from 'lucide-react';
+import { Search, Rocket, Map, List, Star, Users, ArrowRight, Plus, Trash2, AlertCircle } from 'lucide-react';
 /* eslint-disable no-unused-vars */
 import { motion, AnimatePresence } from 'framer-motion';
 /* eslint-enable no-unused-vars */
-import API_URL from '../api';
+import API_URL, { fetchJson } from '../api';
 import { useAuth } from '../context/AuthContext';
 import CreateProjectModal from '../components/CreateProjectModal';
 import GlowCard from '../components/GlowCard';
@@ -28,22 +28,30 @@ export default function Discover() {
   const [searchQuery, setSearchQuery] = useState('');
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // Fetch real projects from backend
-  useEffect(() => {
-    fetch(`${API_URL}/api/projects`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setProjects(data);
-        }
-      })
-      .catch(() => {
-        // API unavailable — show empty state
-      })
-      .finally(() => setLoading(false));
+  // Fetch real projects from backend. A failure here has to surface: swallowing
+  // it renders "No projects found", which is indistinguishable from an empty
+  // universe and leaves the user with nothing to act on.
+  const loadProjects = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchJson('/api/projects/');
+      setProjects(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setError(
+        err?.name === 'TimeoutError'
+          ? 'The server is taking a while to respond — free hosting can take up to a minute to wake up.'
+          : 'Could not reach the server.'
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { loadProjects(); }, [loadProjects]);
 
   const handleCreateProject = async (projectData) => {
     if (!user) return login();
@@ -155,7 +163,21 @@ export default function Discover() {
           </div>
         )}
 
-        {!loading && (
+        {!loading && error && (
+          <div className="py-24 text-center">
+            <AlertCircle size={44} className="text-neon-magenta/60 mx-auto mb-4" />
+            <p className="text-slate-300 text-lg font-medium mb-2">Couldn&apos;t load projects</p>
+            <p className="text-slate-500 text-sm max-w-md mx-auto mb-6">{error}</p>
+            <button
+              onClick={loadProjects}
+              className="px-6 py-2.5 glass border border-white/10 rounded-full text-sm font-medium text-slate-200 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && (
           <AnimatePresence mode="wait">
             
             {/* MAP VIEW */}

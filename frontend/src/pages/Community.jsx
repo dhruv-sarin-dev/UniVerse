@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import API_URL from '../api';
+import API_URL, { fetchJson } from '../api';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -616,18 +616,22 @@ export default function Community() {
   const fetchPosts = useCallback(async () => {
     try {
       setError(null);
-      let url = `${API_URL}/api/community/?sort=${sortBy}`;
+      let path = `/api/community/?sort=${sortBy}`;
       if (activeTab === 'my') {
-        url = `${API_URL}/api/community/user/${userId}`;
+        path = `/api/community/user/${userId}`;
       } else if (selectedCommunity) {
-        url += `&community_id=${selectedCommunity}`;
+        path += `&community_id=${selectedCommunity}`;
       }
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to fetch');
-      const data = await res.json();
+      // fetchJson retries, which matters on the first load after the backend
+      // has been idle — that request can take a minute or fail outright.
+      const data = await fetchJson(path);
       setPosts(Array.isArray(data) ? data : []);
-    } catch {
-      setError('Could not load posts. The server might be unavailable.');
+    } catch (err) {
+      setError(
+        err?.name === 'TimeoutError'
+          ? 'The server is taking a while to wake up. Give it a moment and try again.'
+          : 'Could not load posts. The server might be unavailable.'
+      );
       setPosts([]);
     } finally {
       setLoading(false);
