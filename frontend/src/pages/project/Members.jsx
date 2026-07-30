@@ -26,7 +26,6 @@ export default function Members() {
 
   // ── Compatibility Exam Modal State ────────────────────────────────────
   const [showExamModal, setShowExamModal] = useState(false);
-  const [examEvaluation, setExamEvaluation] = useState(null);
   const [joiningAfterExam, setJoiningAfterExam] = useState(false);
 
   const handleJoin = async (compatibilityExamData = null) => {
@@ -58,7 +57,6 @@ export default function Members() {
   };
 
   const handleExamComplete = async (evaluation) => {
-    setExamEvaluation(evaluation);
     setJoiningAfterExam(true);
     try {
       const body = {
@@ -75,7 +73,6 @@ export default function Members() {
         setTimeout(() => {
           setShowExamModal(false);
           setJoiningAfterExam(false);
-          setExamEvaluation(null);
           fetchProject();
         }, 2500);
       }

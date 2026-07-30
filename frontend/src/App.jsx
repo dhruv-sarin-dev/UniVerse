@@ -6,7 +6,6 @@ import MiniCallOverlay from './components/MiniCallOverlay';
 import { useLocation, Navigate } from 'react-router-dom';
 import { useEffect, lazy, Suspense } from 'react';
 import Lenis from 'lenis';
-/* eslint-disable no-unused-vars */
 import { AnimatePresence, motion } from 'framer-motion';
 
 import CommandPalette from './components/CommandPalette';

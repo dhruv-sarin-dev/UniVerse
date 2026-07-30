@@ -1,10 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Terminal, MessageSquare, Video, VideoOff, PhoneOff, Monitor, Code, Github, ExternalLink, GitCommit, GitPullRequest, RefreshCw, Link2, Save, Mic, MicOff, X } from 'lucide-react';
 
-/* eslint-disable no-unused-vars */
-
 import { motion, AnimatePresence } from 'framer-motion';
-/* eslint-enable no-unused-vars */
 import API_URL from '../api';
 import { useWarRoom } from '../context/WarRoomContext';
 

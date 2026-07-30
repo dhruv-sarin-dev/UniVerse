@@ -27,7 +27,6 @@ export default function CompatibilityExam() {
   const [mode, setMode] = useState('setup'); // setup | exam | results
   const [evaluation, setEvaluation] = useState(null);
   const [submittedAnswers, setSubmittedAnswers] = useState(null);
-  const [savedQuestions, setSavedQuestions] = useState(null);
 
   // ── Project Context Form ──────────────────────────────────────────────
   const [projectForm, setProjectForm] = useState({
