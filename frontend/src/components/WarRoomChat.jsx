@@ -1,9 +1,25 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Terminal, MessageSquare, Video, VideoOff, PhoneOff, Monitor, Code, Github, ExternalLink, GitCommit, GitPullRequest, RefreshCw, Link2, Save, Mic, MicOff, X } from 'lucide-react';
+import { Send, Video, VideoOff, PhoneOff, Monitor, ExternalLink, RefreshCw, Mic, MicOff, X } from 'lucide-react';
 
 import { motion, AnimatePresence } from 'framer-motion';
 import API_URL from '../api';
 import { useWarRoom } from '../context/WarRoomContext';
+
+/**
+ * War Room — an operations sheet.
+ *
+ * Video tiles are monitored panels on an ink plate (video is dark; paper
+ * around it, ink beneath it), the notes pane is the running log, and the
+ * repository pane is the manifest. Signal is earned twice here and nowhere
+ * else: the live indicator while a call is up, and the minutes recorder
+ * while it is capturing.
+ */
+
+const EASE = [0.16, 1, 0.3, 1];
+
+function Label({ children, className = '' }) {
+  return <span className={`fm-label text-graphite ${className}`}>{children}</span>;
+}
 
 // --- Small Helper for Video ---
 function VideoPlayer({ stream, muted, label, isScreenShare, onDoubleClick, isFullscreen }) {
@@ -25,7 +41,7 @@ useEffect(() => {
     try {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioContext.createAnalyser();
-      
+
       // Some browsers require stream to be active before creating source
       microphone = audioContext.createMediaStreamSource(stream);
       javascriptNode = audioContext.createScriptProcessor(2048, 1, 1);
@@ -63,13 +79,14 @@ useEffect(() => {
   }, [stream]);
 
   return (
-    <div 
+    <div
       onDoubleClick={onDoubleClick}
       title={onDoubleClick ? "Double-click to expand" : undefined}
-      className={`relative bg-black/80 rounded-xl overflow-hidden group transition-all duration-300 ${onDoubleClick ? 'cursor-pointer' : ''} ${isFullscreen ? 'w-full h-full' : (isScreenShare ? 'col-span-full aspect-auto h-64' : 'aspect-video')} ${isSpeaking ? 'border-2 border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.6)]' : 'border border-white/10 shadow-xl'}`}>
-      <video ref={videoRef} autoPlay playsInline muted={muted} className={`w-full h-full ${isScreenShare || isFullscreen ? 'object-contain bg-black' : 'object-cover'}`} />
-      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/60 backdrop-blur rounded flex items-center gap-2 text-[10px] text-white font-bold tracking-wider uppercase">
-        {isScreenShare && <Monitor size={10} className="text-teal-400" />} {label}
+      className={`relative overflow-hidden bg-ink transition-colors duration-200 ${onDoubleClick ? 'cursor-pointer' : ''} ${isFullscreen ? 'h-full w-full' : (isScreenShare ? 'col-span-full aspect-auto h-64' : 'aspect-video')} ${isSpeaking ? 'outline outline-2 outline-blueprint' : 'outline outline-1 outline-paper/20'}`}>
+      <video ref={videoRef} autoPlay playsInline muted={muted} className={`h-full w-full ${isScreenShare || isFullscreen ? 'bg-ink object-contain' : 'object-cover'}`} />
+      <div className="absolute bottom-0 left-0 flex items-center gap-1.5 bg-ink/85 px-2 py-1">
+        {isScreenShare && <Monitor size={10} className="text-paper/70" />}
+        <span className="fm-label !text-[9px] text-paper">{label}</span>
       </div>
     </div>
   );
@@ -211,40 +228,33 @@ export default function WarRoomChat({ project, user }) {
   const githubDevUrl = parsed ? `https://github.dev/${parsed.owner}/${parsed.repo}` : null;
   const githubWebUrl = parsed ? `https://github.com/${parsed.owner}/${parsed.repo}` : null;
 
+  const controlBtn = 'flex items-center justify-center gap-2 border border-ink px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper';
+
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-[800px]">
+    <div className="flex h-[800px] flex-col gap-5 lg:flex-row">
 
-      {/* Left Pane: Notes & Repo Tabs */}
-      <div className="flex-1 flex flex-col bg-black/40 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-xl shadow-2xl relative">
-        {/* Tab Header */}
-        <div className="p-4 bg-gradient-to-r from-teal-500/10 to-indigo-500/10 border-b border-white/5 z-10 relative">
-          <div className="flex items-center gap-2">
+      {/* ── Left pane: log & manifest ──────────────────────────────── */}
+      <div className="relative flex flex-1 flex-col overflow-hidden border border-ink/20 bg-paper-raised">
+        <div className="flex items-center gap-4 border-b border-ink/15 px-3 py-2">
+          {[
+            { id: 'notes', name: 'Log — shared notes' },
+            { id: 'repo', name: 'Manifest — repository' },
+          ].map((tab) => (
             <button
-              onClick={() => setLeftTab('notes')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${leftTab === 'notes'
-                  ? 'bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 shadow-lg'
-                  : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                }`}
+              key={tab.id}
+              onClick={() => setLeftTab(tab.id)}
+              className={`fm-label transition-colors hover:text-blueprint ${
+                leftTab === tab.id ? '!text-ink underline underline-offset-4' : 'text-graphite'
+              }`}
             >
-              <Code size={14} /> Live Notes
+              {tab.name}
             </button>
-            <button
-              onClick={() => setLeftTab('repo')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${leftTab === 'repo'
-                  ? 'bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 shadow-lg'
-                  : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                }`}
-            >
-              <Github size={14} /> Project Repo
-            </button>
+          ))}
 
-            <div className="ml-auto flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-teal-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">
-                {isConnected ? 'Connected' : 'Offline'}
-              </span>
-            </div>
-          </div>
+          <span className="ml-auto flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 ${isConnected ? 'bg-blueprint' : 'bg-rule'}`} />
+            <Label className="!text-[9px]">{isConnected ? 'Linked' : 'Offline'}</Label>
+          </span>
         </div>
 
         {/* Tab Content */}
@@ -253,71 +263,92 @@ export default function WarRoomChat({ project, user }) {
             value={sharedNotes}
             onChange={handleNotesChange}
             placeholder={"// Type code snippets, meeting notes, action items...\n// Changes are broadcast instantly to all team members."}
-            className="flex-1 w-full bg-transparent text-slate-300 font-mono text-sm p-6 resize-none focus:outline-none focus:ring-inset focus:ring-1 focus:ring-teal-500/50 transition-colors placeholder:text-slate-600 leading-relaxed"
+            className="w-full flex-1 resize-none bg-paper p-5 font-mono text-[13px] leading-relaxed text-ink transition-colors placeholder:text-graphite focus:outline-none focus:ring-1 focus:ring-inset focus:ring-blueprint disabled:bg-paper-deep"
             disabled={!isConnected}
             spellCheck="false"
           />
         ) : (
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <div className="flex-1 space-y-6 overflow-y-auto p-4">
             {/* Repo Setup (if no URL set) */}
             {!repoUrl ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center border border-emerald-500/20">
-                  <Github size={28} className="text-emerald-400" />
-                </div>
-                <h3 className="text-lg font-black text-white">Connect Your Repository</h3>
-                <p className="text-xs text-slate-400 max-w-sm">Link your team's GitHub repository to see live commits, open PRs, and access the browser IDE.</p>
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+                <p className="fm-condensed text-2xl font-black uppercase leading-none text-ink">
+                  No repository linked
+                </p>
+                <p className="max-w-sm text-sm leading-relaxed text-graphite">
+                  Link the team&apos;s GitHub repository to read live commits, open pull
+                  requests, and open the browser IDE.
+                </p>
 
                 {isLeader ? (
-                  <div className="w-full max-w-sm space-y-3">
+                  <div className="mt-2 w-full max-w-sm space-y-3">
                     <input
                       type="text"
                       placeholder="github.com/username/repo or owner/repo"
                       value={repoInput}
                       onChange={e => setRepoInput(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && saveRepoUrl()}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full border border-ink/25 bg-paper px-3 py-2.5 font-mono text-[13px] text-ink placeholder:text-graphite focus:border-blueprint focus:outline-none"
                     />
                     <button
                       onClick={saveRepoUrl}
                       disabled={savingRepo || !repoInput.trim()}
-                      className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
+                      className="group relative flex w-full items-center justify-center gap-2 overflow-hidden bg-ink px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-paper disabled:cursor-not-allowed disabled:bg-paper-deep disabled:text-graphite"
                     >
-                      {savingRepo ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
-                      {savingRepo ? 'Saving...' : 'Link Repository'}
+                      {!savingRepo && repoInput.trim() && (
+                        <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+                      )}
+                      {savingRepo && <RefreshCw size={13} className="relative animate-spin" />}
+                      <span className="relative">{savingRepo ? 'Saving' : 'Link repository'}</span>
                     </button>
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500 italic">Ask your project leader to link a repository.</p>
+                  <Label className="!text-[10px]">Ask the project lead to link a repository</Label>
                 )}
               </div>
             ) : (
               /* Repo Dashboard */
               <>
-                {/* Repo Header */}
-                <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/5 border border-emerald-500/15 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Github size={16} className="text-emerald-400" />
-                      <span className="text-sm font-black text-white">{parsed?.owner}/{parsed?.repo}</span>
-                    </div>
-                    <button onClick={() => fetchRepoData()} className="p-1.5 text-slate-500 hover:text-white transition-colors" title="Refresh">
+                {/* Repo header */}
+                <div className="border border-ink/20 bg-paper p-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="truncate font-mono text-[13px] text-ink">
+                      {parsed?.owner}/{parsed?.repo}
+                    </span>
+                    <button
+                      onClick={() => fetchRepoData()}
+                      className="shrink-0 text-graphite transition-colors hover:text-blueprint"
+                      title="Refresh"
+                    >
                       <RefreshCw size={12} className={repoLoading ? 'animate-spin' : ''} />
                     </button>
                   </div>
-                  <div className="flex gap-2 mt-3">
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
                     {githubWebUrl && (
-                      <a href={githubWebUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-[10px] font-bold text-slate-300 transition-colors">
+                      <a
+                        href={githubWebUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 border border-ink/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper"
+                      >
                         <ExternalLink size={10} /> View on GitHub
                       </a>
                     )}
                     {githubDevUrl && (
-                      <a href={githubDevUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/20 rounded-lg text-[10px] font-bold text-indigo-300 transition-colors">
-                        <Code size={10} /> Open in VS Code
+                      <a
+                        href={githubDevUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 border border-ink/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper"
+                      >
+                        Open in VS Code
                       </a>
                     )}
                     {isLeader && (
-                      <button onClick={() => { setRepoUrl(''); setRepoInput(''); }} className="ml-auto text-[10px] text-red-400/50 hover:text-red-400 transition-colors">
+                      <button
+                        onClick={() => { setRepoUrl(''); setRepoInput(''); }}
+                        className="fm-label ml-auto !text-[9px] text-graphite transition-colors hover:text-ink"
+                      >
                         Unlink
                       </button>
                     )}
@@ -325,69 +356,83 @@ export default function WarRoomChat({ project, user }) {
                 </div>
 
                 {repoError && (
-                  <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    ⚠ {repoError}
+                  <div className="border border-ink/25 bg-paper p-3">
+                    <Label className="!text-[10px] !text-ink">Manifest unavailable</Label>
+                    <p className="mt-1 font-mono text-[12px] text-graphite">{repoError}</p>
                   </div>
                 )}
 
                 {/* Open Pull Requests */}
                 {pulls.length > 0 && (
                   <div>
-                    <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <GitPullRequest size={12} /> Open Pull Requests ({pulls.length})
-                    </h4>
-                    <div className="space-y-2">
-                      {pulls.map(pr => (
-                        <a key={pr.id} href={pr.html_url} target="_blank" rel="noopener noreferrer" className="block p-3 bg-black/30 border border-white/5 rounded-lg hover:border-emerald-500/30 transition-all group">
-                          <div className="flex items-center gap-2">
-                            <span className="text-emerald-400 text-[10px] font-bold">#{pr.number}</span>
-                            <span className="text-xs text-slate-300 font-semibold group-hover:text-white transition-colors truncate">{pr.title}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <span className="text-[9px] text-slate-500">{pr.user?.login}</span>
-                            <span className="text-[9px] text-slate-600">• {timeAgo(pr.created_at)}</span>
-                          </div>
-                        </a>
-                      ))}
+                    <div className="flex items-baseline justify-between border-b border-ink/20 pb-1.5">
+                      <Label className="!text-[10px] !text-ink">Open pull requests</Label>
+                      <Label className="!text-[10px]">{pulls.length}</Label>
                     </div>
+                    <ul>
+                      {pulls.map(pr => (
+                        <li key={pr.id} className="border-b border-rule">
+                          <a
+                            href={pr.html_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group block py-2.5"
+                          >
+                            <div className="flex items-baseline gap-2">
+                              <span className="shrink-0 font-mono text-[11px] text-blueprint">#{pr.number}</span>
+                              <span className="truncate text-[13px] text-ink transition-colors group-hover:text-blueprint">
+                                {pr.title}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 font-mono text-[11px] text-graphite">
+                              {pr.user?.login} · {timeAgo(pr.created_at)}
+                            </p>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
 
                 {/* Recent Commits */}
                 <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <GitCommit size={12} /> Recent Commits
-                  </h4>
+                  <div className="flex items-baseline justify-between border-b border-ink/20 pb-1.5">
+                    <Label className="!text-[10px] !text-ink">Recent commits</Label>
+                    <Label className="!text-[10px]">{commits.length}</Label>
+                  </div>
                   {repoLoading ? (
                     <div className="flex items-center justify-center py-8">
-                      <RefreshCw size={16} className="text-slate-500 animate-spin" />
+                      <div className="h-6 w-6 animate-spin rounded-full border-2 border-ink/15 border-t-blueprint" />
                     </div>
                   ) : commits.length > 0 ? (
-                    <div className="relative">
-                      {/* Timeline line */}
-                      <div className="absolute left-[11px] top-3 bottom-3 w-px bg-gradient-to-b from-emerald-500/30 via-slate-700/30 to-transparent"></div>
-
-                      <div className="space-y-1">
-                        {commits.map((c, i) => (
-                          <div key={c.sha} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/[0.02] transition-colors group relative">
-                            {/* Timeline dot */}
-                            <div className={`w-[7px] h-[7px] rounded-full mt-1.5 shrink-0 ring-2 ring-black/80 ${i === 0 ? 'bg-emerald-400' : 'bg-slate-600'}`}></div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs text-slate-300 leading-snug truncate group-hover:text-white transition-colors">{c.commit?.message?.split('\n')[0]}</p>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[9px] text-slate-500 font-semibold">{c.commit?.author?.name || c.author?.login}</span>
-                                <span className="text-[9px] text-slate-600">• {timeAgo(c.commit?.author?.date)}</span>
-                                <a href={c.html_url} target="_blank" rel="noopener noreferrer" className="ml-auto text-[9px] text-slate-600 hover:text-teal-400 transition-colors font-mono opacity-0 group-hover:opacity-100">
-                                  {c.sha?.slice(0, 7)}
-                                </a>
-                              </div>
-                            </div>
+                    <ul>
+                      {commits.map((c, i) => (
+                        <li key={c.sha} className="group flex items-baseline gap-3 border-b border-rule py-2">
+                          <span
+                            className={`mt-1.5 h-1.5 w-1.5 shrink-0 self-start ${i === 0 ? 'bg-blueprint' : 'bg-rule'}`}
+                            aria-hidden="true"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] leading-snug text-ink">
+                              {c.commit?.message?.split('\n')[0]}
+                            </p>
+                            <p className="mt-0.5 font-mono text-[11px] text-graphite">
+                              {c.commit?.author?.name || c.author?.login} · {timeAgo(c.commit?.author?.date)}
+                            </p>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                          <a
+                            href={c.html_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 font-mono text-[11px] text-graphite transition-colors hover:text-blueprint"
+                          >
+                            {c.sha?.slice(0, 7)}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
                   ) : (
-                    <p className="text-xs text-slate-600 italic text-center py-6">No commits found.</p>
+                    <p className="py-6 text-center font-mono text-[12px] text-graphite">— no commits read</p>
                   )}
                 </div>
               </>
@@ -396,67 +441,79 @@ export default function WarRoomChat({ project, user }) {
         )}
       </div>
 
-      {/* Right Pane: Media & Chat */}
-      <div className="w-full lg:w-[400px] flex flex-col bg-black/40 border border-white/10 rounded-2xl overflow-hidden backdrop-blur-xl shadow-2xl relative">
-        <div className="p-4 bg-gradient-to-r from-teal-500/10 to-indigo-500/10 border-b border-white/5 flex flex-col gap-3 z-10 relative">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-              <Terminal size={16} className="text-indigo-400" /> Video Conferencing
-            </h3>
-            {isLeader && (
-              <div className="flex gap-2">
-                <button onClick={generateMOM} disabled={isGeneratingMOM} className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/50 rounded hover:bg-purple-500/30 transition-colors">
-                  {isGeneratingMOM ? 'Generating...' : 'Generate MOM'}
-                </button>
-                <button 
-                   onClick={toggleMOM}
-                   className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded border transition-colors ${
-                       isMOMEnabled 
-                         ? 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30' 
-                         : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/30'
-                   }`}
-                >
-                   <span className="flex items-center gap-1">
-                     {isMOMEnabled && <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse"></span>}
-                     {isMOMEnabled ? 'Stop MOM Rec' : 'Start MOM Rec'}
-                   </span>
-                </button>
-              </div>
+      {/* ── Right pane: station ────────────────────────────────────── */}
+      <div className="relative flex w-full flex-col overflow-hidden border border-ink/20 bg-paper-raised lg:w-[400px]">
+        <div className="flex flex-col gap-3 border-b border-ink/15 px-3 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="!text-ink">Station — call &amp; channel</Label>
+            {inCall && (
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 bg-signal" />
+                <span className="fm-label !text-[9px] text-signal">Live</span>
+              </span>
             )}
           </div>
 
+          {isLeader && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={generateMOM}
+                disabled={isGeneratingMOM}
+                className="border border-ink/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper disabled:opacity-60"
+              >
+                {isGeneratingMOM ? 'Generating minutes' : 'Generate minutes'}
+              </button>
+              <button
+                onClick={toggleMOM}
+                className={`flex items-center gap-1.5 border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+                  isMOMEnabled
+                    ? 'border-signal text-signal hover:bg-signal hover:text-paper'
+                    : 'border-ink/25 text-ink hover:bg-ink hover:text-paper'
+                }`}
+              >
+                {isMOMEnabled && <span className="h-1.5 w-1.5 bg-signal" />}
+                {isMOMEnabled ? 'Stop recording' : 'Record minutes'}
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             {!inCall ? (
-              <button onClick={startHuddle} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-lg transition-all border border-indigo-500/50">
-                <Video size={14} /> Join Call
+              <button
+                onClick={startHuddle}
+                className="group relative flex flex-1 items-center justify-center gap-2 overflow-hidden bg-ink px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-paper"
+              >
+                <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+                <Video size={14} className="relative" />
+                <span className="relative">Join call</span>
               </button>
             ) : (
               <>
-              <button 
-                  onClick={toggleMute} 
-                  className={`flex items-center justify-center gap-2 px-3 py-2 ${isMuted ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 border border-red-500/50' : 'bg-slate-700/50 text-white hover:bg-slate-700 border border-slate-600/50'} text-xs font-bold rounded-lg transition-all`}
+                <button
+                  onClick={toggleMute}
+                  className={isMuted ? `${controlBtn} bg-ink text-paper` : controlBtn}
                   title={isMuted ? "Unmute" : "Mute"}
                 >
                   {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
                 </button>
-                <button 
-                  onClick={toggleVideo} 
-                  className={`flex items-center justify-center gap-2 px-3 py-2 ${isVideoOff ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 border border-red-500/50' : 'bg-slate-700/50 text-white hover:bg-slate-700 border border-slate-600/50'} text-xs font-bold rounded-lg transition-all`}
+                <button
+                  onClick={toggleVideo}
+                  className={controlBtn}
                   title={isVideoOff ? "Turn Camera On" : "Turn Camera Off"}
                 >
                   {isVideoOff ? <VideoOff size={14} /> : <Video size={14} />}
                 </button>
                 {!isScreenSharing ? (
-                  <button onClick={shareScreen} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-teal-600 hover:bg-teal-500 text-white text-xs font-bold rounded-lg transition-all">
-                    <Monitor size={14} /> Present Screen
+                  <button onClick={shareScreen} className={`${controlBtn} flex-1`}>
+                    <Monitor size={14} /> Present
                   </button>
                 ) : (
-                  <button onClick={stopScreenShare} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-lg transition-all">
-                    <Video size={14} /> Back to Camera
+                  <button onClick={stopScreenShare} className={`${controlBtn} flex-1`}>
+                    <Video size={14} /> Camera
                   </button>
                 )}
-                <button onClick={leaveHuddle} className="flex-none p-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-all border border-red-500/30">
-                  <PhoneOff size={16} />
+                <button onClick={leaveHuddle} className={controlBtn} title="Leave call">
+                  <PhoneOff size={14} />
                 </button>
               </>
             )}
@@ -465,8 +522,13 @@ export default function WarRoomChat({ project, user }) {
 
         <AnimatePresence>
           {inCall && (
-            <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="border-b border-white/5 bg-black/60 overflow-y-auto max-h-[300px] scrollbar-thin">
-              <div className="p-3 grid grid-cols-2 gap-3 auto-rows-max">
+            <motion.div
+              initial={{ height: 0 }}
+              animate={{ height: "auto" }}
+              exit={{ height: 0 }}
+              className="max-h-[300px] overflow-y-auto border-b border-ink/15 bg-paper-deep"
+            >
+              <div className="grid auto-rows-max grid-cols-2 gap-2 p-2">
                 {localStream && <VideoPlayer stream={localStream} muted={true} isScreenShare={isScreenSharing} label={`${user.display_name} (Me)`} onDoubleClick={() => setFullscreenVideo({ stream: localStream, label: `${user.display_name} (Me)`, isScreenShare: isScreenSharing })} />}
                 {Object.entries(remoteStreams).map(([uid, stream]) => {
                   const memberInfo = project?.members_info?.find(m => m.uid === uid);
@@ -478,17 +540,25 @@ export default function WarRoomChat({ project, user }) {
           )}
         </AnimatePresence>
 
-        {/* Chat Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide z-10 relative bg-black/20">
+        {/* Channel */}
+        <div className="relative z-10 flex-1 space-y-4 overflow-y-auto bg-paper p-4">
           {messages.map((msg, i) => {
             const isMe = msg.uid === user.uid;
             return (
-              <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                  <div className={`flex items-center gap-2 mb-0.5 px-2`}><span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{msg.user}</span></div>
-                  <div className={`px-3 py-2 rounded-2xl text-xs leading-relaxed shadow-lg ${isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white/10 text-slate-200 rounded-tl-none'}`}>
-                    {msg.text}
-                  </div>
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, ease: EASE }}
+                key={i}
+                className={`flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}
+              >
+                <Label className="!text-[9px]">{msg.user}</Label>
+                <div
+                  className={`max-w-[85%] px-3 py-2 text-[13px] leading-relaxed ${
+                    isMe ? 'bg-ink text-paper' : 'border border-ink/20 bg-paper-raised text-ink'
+                  }`}
+                >
+                  {msg.text}
                 </div>
               </motion.div>
             );
@@ -497,44 +567,58 @@ export default function WarRoomChat({ project, user }) {
         </div>
 
         {/* Input Area */}
-        <div className="p-3 bg-white/5 border-t border-white/5 z-10 relative">
+        <div className="relative z-10 border-t border-ink/15 p-3">
           <div className="relative flex items-center gap-2">
-            <input type="text" placeholder="Type message..." value={inputText} onChange={e => setInputText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendText()} className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500" />
-            <button onClick={handleSendText} disabled={!inputText.trim()} className="p-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-xl"><Send size={16} /></button>
+            <input
+              type="text"
+              placeholder="Message the room"
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSendText()}
+              className="flex-1 border border-ink/25 bg-paper px-3 py-2.5 font-mono text-[12px] text-ink placeholder:text-graphite focus:border-blueprint focus:outline-none"
+            />
+            <button
+              onClick={handleSendText}
+              disabled={!inputText.trim()}
+              className="bg-ink p-2.5 text-paper transition-colors hover:bg-blueprint disabled:bg-paper-deep disabled:text-graphite"
+            >
+              <Send size={15} />
+            </button>
           </div>
         </div>
       </div>
 
+      {/* ── Fullscreen monitor ─────────────────────────────────────── */}
       <AnimatePresence>
         {fullscreenVideo && (
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }} 
-            animate={{ opacity: 1, scale: 1 }} 
-            exit={{ opacity: 0, scale: 0.95 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ duration: 0.15, ease: "easeOut" }}
-            className="fixed inset-0 z-[1000] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 md:p-8"
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-ink/95 p-4 md:p-8"
             onClick={() => setFullscreenVideo(null)}
           >
-            <button 
-              onClick={(e) => { e.stopPropagation(); setFullscreenVideo(null); }} 
-              className="absolute top-4 right-4 md:top-6 md:right-6 p-3 bg-white/10 border border-white/20 hover:bg-red-500/80 hover:border-red-500 text-white rounded-2xl transition-all z-[1001] shadow-2xl"
+            <button
+              onClick={(e) => { e.stopPropagation(); setFullscreenVideo(null); }}
+              className="absolute right-4 top-4 z-[1001] border border-paper/25 p-2.5 text-paper transition-colors hover:bg-paper hover:text-ink md:right-6 md:top-6"
               title="Close Fullscreen (Esc)"
             >
-              <X size={24} />
+              <X size={20} />
             </button>
-            <div 
-              className="w-full h-full max-w-[90vw] max-h-[90vh] relative flex flex-col items-center justify-center cursor-default gap-4"
+            <div
+              className="relative flex h-full max-h-[90vh] w-full max-w-[90vw] cursor-default flex-col items-center justify-center gap-4"
               onClick={e => e.stopPropagation()}
               onDoubleClick={() => setFullscreenVideo(null)}
             >
-              <div 
-                className="w-full h-full ring-1 ring-white/10 rounded-2xl overflow-hidden shadow-2xl bg-black flex-1"
+              <div
+                className="h-full w-full flex-1 overflow-hidden bg-ink outline outline-1 outline-paper/20"
                 title="Double-click to close"
               >
-                <VideoPlayer 
-                  stream={fullscreenVideo.stream} 
-                  muted={false} 
-                  label={fullscreenVideo.label} 
+                <VideoPlayer
+                  stream={fullscreenVideo.stream}
+                  muted={false}
+                  label={fullscreenVideo.label}
                   isScreenShare={fullscreenVideo.isScreenShare}
                   isFullscreen={true}
                 />
@@ -542,14 +626,14 @@ export default function WarRoomChat({ project, user }) {
 
               {/* Thumbnail Strip of other participants */}
               {inCall && (
-                <div 
-                  className="flex gap-3 overflow-x-auto max-w-full px-2 py-1 shrink-0 scrollbar-hide" 
-                  onClick={(e) => e.stopPropagation()} 
+                <div
+                  className="flex max-w-full shrink-0 gap-3 overflow-x-auto px-2 py-1"
+                  onClick={(e) => e.stopPropagation()}
                   onDoubleClick={(e) => e.stopPropagation()}
                 >
                   {localStream && localStream !== fullscreenVideo.stream && (
-                    <div 
-                      className="w-48 h-32 shrink-0 rounded-xl overflow-hidden ring-1 ring-white/20 cursor-pointer hover:ring-teal-500 transition-all shadow-lg"
+                    <div
+                      className="h-32 w-48 shrink-0 cursor-pointer overflow-hidden outline outline-1 outline-paper/25 transition-all hover:outline-blueprint"
                       onClick={() => setFullscreenVideo({ stream: localStream, label: `${user.display_name} (Me)`, isScreenShare: isScreenSharing })}
                     >
                       <VideoPlayer stream={localStream} muted={true} label={`${user.display_name} (Me)`} isScreenShare={isScreenSharing} isFullscreen={true} />
@@ -560,11 +644,11 @@ export default function WarRoomChat({ project, user }) {
                     if (stream === fullscreenVideo.stream) return null;
                     const memberInfo = project?.members_info?.find(m => m.uid === uid);
                     const displayName = memberInfo ? memberInfo.name : `Peer ${uid.slice(0, 4)}`;
-                    
+
                     return (
-                      <div 
+                      <div
                         key={uid}
-                        className="w-48 h-32 shrink-0 rounded-xl overflow-hidden ring-1 ring-white/20 cursor-pointer hover:ring-teal-500 transition-all shadow-lg"
+                        className="h-32 w-48 shrink-0 cursor-pointer overflow-hidden outline outline-1 outline-paper/25 transition-all hover:outline-blueprint"
                         onClick={() => setFullscreenVideo({ stream, label: displayName, isScreenShare: false })}
                       >
                         <VideoPlayer stream={stream} muted={false} label={displayName} isScreenShare={false} isFullscreen={true} />
@@ -576,45 +660,45 @@ export default function WarRoomChat({ project, user }) {
 
               {/* Call Controls inside Fullscreen overlay */}
               {inCall && (
-                <div 
-                  className="flex items-center gap-4 bg-[#1e1e1e]/80 border border-white/10 backdrop-blur-xl px-6 py-4 rounded-3xl shadow-2xl z-[1010]" 
+                <div
+                  className="z-[1010] flex items-center gap-3 border border-paper/20 bg-ink px-5 py-3"
                   onClick={e => e.stopPropagation()}
                   onDoubleClick={e => e.stopPropagation()}
                 >
-                  <button 
-                    onClick={toggleMute} 
-                    className={`flex items-center justify-center w-12 h-12 rounded-full ${isMuted ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30' : 'bg-slate-700/50 text-white border border-slate-600/50 hover:bg-slate-700'} transition-all`}
+                  <button
+                    onClick={toggleMute}
+                    className={`flex h-10 w-10 items-center justify-center border border-paper/25 transition-colors ${isMuted ? 'bg-paper text-ink' : 'text-paper hover:bg-paper hover:text-ink'}`}
                     title={isMuted ? "Unmute" : "Mute"}
                   >
-                    {isMuted ? <MicOff size={20} /> : <Mic size={20} />}
+                    {isMuted ? <MicOff size={16} /> : <Mic size={16} />}
                   </button>
-                  <button 
-                    onClick={toggleVideo} 
-                    className={`flex items-center justify-center w-12 h-12 rounded-full ${isVideoOff ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30' : 'bg-slate-700/50 text-white border border-slate-600/50 hover:bg-slate-700'} transition-all`}
+                  <button
+                    onClick={toggleVideo}
+                    className="flex h-10 w-10 items-center justify-center border border-paper/25 text-paper transition-colors hover:bg-paper hover:text-ink"
                     title={isVideoOff ? "Turn Camera On" : "Turn Camera Off"}
                   >
-                    {isVideoOff ? <VideoOff size={20} /> : <Video size={20} />}
+                    {isVideoOff ? <VideoOff size={16} /> : <Video size={16} />}
                   </button>
-                  
+
                   {!isScreenSharing ? (
-                    <button onClick={shareScreen} className="flex items-center justify-center gap-2 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white text-sm font-bold rounded-2xl transition-all shadow-lg shadow-teal-500/20">
-                      <Monitor size={18} /> Present Screen
+                    <button onClick={shareScreen} className="flex items-center gap-2 border border-paper/25 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-paper hover:text-ink">
+                      <Monitor size={15} /> Present screen
                     </button>
                   ) : (
-                    <button onClick={stopScreenShare} className="flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded-2xl transition-all shadow-lg shadow-amber-500/20">
-                      <Video size={18} /> Back to Camera
+                    <button onClick={stopScreenShare} className="flex items-center gap-2 border border-paper/25 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-paper hover:text-ink">
+                      <Video size={15} /> Back to camera
                     </button>
                   )}
 
-                  <button 
+                  <button
                     onClick={() => {
                       leaveHuddle();
                       setFullscreenVideo(null);
-                    }} 
-                    className="flex items-center justify-center w-12 h-12 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all shadow-lg shadow-red-500/20"
+                    }}
+                    className="flex h-10 w-10 items-center justify-center bg-signal text-paper transition-colors hover:bg-paper hover:text-ink"
                     title="Leave Call"
                   >
-                    <PhoneOff size={20} />
+                    <PhoneOff size={16} />
                   </button>
                 </div>
               )}

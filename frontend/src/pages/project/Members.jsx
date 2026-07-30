@@ -1,10 +1,47 @@
 import { useState, useEffect } from 'react';
-import { useOutletContext, Link } from 'react-router-dom';
-import { Users, Sparkles, Mail, Github, Trash2, BarChart3, X, Star, BookOpen, Code, ExternalLink, Shield, Brain, ChevronUp, ChevronDown } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { Mail, Github, Trash2, X, Star, ExternalLink, ChevronUp, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
 import API_URL from '../../api';
 import ApplicantCompatibilityExam from '../../components/ApplicantCompatibilityExam';
+
+/**
+ * Members — the roster, with the vetting appendix beneath it.
+ *
+ * The team is a numbered roster rather than a grid of cards, and everything
+ * the AI measured about an applicant — the compatibility score and its radar
+ * metrics — is set in mono, because those are readings, not decoration.
+ *
+ * The compatibility exam modal keeps a dark plate: the exam component it
+ * wraps is not part of this conversion and renders light-on-dark, so an
+ * inverted appendix is the honest way to host it.
+ */
+
+const EASE = [0.16, 1, 0.3, 1];
+
+function Label({ children, className = '' }) {
+  return <span className={`fm-label text-graphite ${className}`}>{children}</span>;
+}
+
+function Panel({ caption, meta, children, className = '' }) {
+  return (
+    <section className={`border border-ink/20 bg-paper-raised ${className}`}>
+      <div className="flex items-baseline justify-between gap-3 border-b border-ink/15 px-3 py-2">
+        <Label className="!text-ink">{caption}</Label>
+        {meta}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Scores band into three readings; the word carries the meaning, not a colour. */
+function scoreBand(score) {
+  if (score >= 70) return 'strong fit';
+  if (score >= 45) return 'partial fit';
+  return 'weak fit';
+}
 
 export default function Members() {
   const { project, fetchProject, isMember, isRequested, isOwner } = useOutletContext();
@@ -159,41 +196,32 @@ export default function Members() {
     }
   };
 
-  return (
-    <div className="space-y-8 pb-10">
-      {/* Current Team Section */}
-      <div className="bg-white/[0.03] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-        <div className="p-5 bg-gradient-to-r from-teal-500/10 to-cyan-500/5 border-b border-white/5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-teal-500/20 rounded-xl">
-                <Users size={18} className="text-teal-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-widest">
-                  Current Team
-                </h3>
-              </div>
-            </div>
-            <span className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-500/10 text-teal-400 text-[10px] font-bold rounded-lg border border-teal-500/20">
-              <span className="inline-block w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse" />
-              {project.members_info?.length || 0} Active
-            </span>
-          </div>
-        </div>
+  const members = project.members_info || [];
+  const requests = project.join_requests_info || [];
 
-        <div className="p-5 grid gap-4 grid-cols-1 md:grid-cols-2">
-          {project.members_info?.map((m, idx) => {
+  return (
+    <div className="space-y-6 pb-10">
+      {/* ── Roster ──────────────────────────────────────────────────── */}
+      <Panel
+        caption="Roster — on board"
+        meta={<Label className="whitespace-nowrap !text-[10px]">{members.length} of record</Label>}
+      >
+        <ul>
+          {members.map((m, idx) => {
             const isMemberOwner = m.uid === project.owner_uid;
             const isOnline = onlineUsers.includes(m.uid);
             return (
-              <motion.div
+              <motion.li
                 key={m.uid}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: idx * 0.05 }}
-                className="flex items-center gap-4 p-4 rounded-xl bg-black/30 border border-white/5 hover:border-teal-500/20 transition-all group"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(idx * 0.05, 0.3), duration: 0.4, ease: EASE }}
+                className="group flex items-center gap-4 border-b border-rule px-4 py-3 last:border-b-0"
               >
+                <span className="w-6 shrink-0 font-mono text-[11px] text-graphite">
+                  {String(idx + 1).padStart(2, '0')}
+                </span>
+
                 <div className="relative shrink-0">
                   {m.photo_url ? (
                     <img
@@ -201,278 +229,328 @@ export default function Members() {
                       alt=""
                       referrerPolicy="no-referrer"
                       onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-white/10 group-hover:border-teal-500/30 transition-colors"
+                      className="h-10 w-10 border border-ink/20 object-cover"
                     />
                   ) : null}
                   <div
-                    className={`w-12 h-12 rounded-full bg-gradient-to-br ${isMemberOwner ? 'from-teal-500 to-cyan-600' : 'from-slate-700 to-slate-800'} flex items-center justify-center text-sm font-black text-white border-2 border-white/10 group-hover:border-teal-500/30 transition-colors`}
+                    className="flex h-10 w-10 items-center justify-center border border-ink/20 bg-paper-deep font-mono text-[13px] font-bold text-ink"
                     style={m.photo_url ? { display: 'none' } : {}}
                   >
                     {m.name.charAt(0).toUpperCase()}
                   </div>
-                  <div
-                    className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-black/80 ${isOnline ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]' : 'bg-slate-600'}`}
+                  <span
+                    className={`absolute -bottom-1 -right-1 h-2 w-2 border border-paper-raised ${
+                      isOnline ? 'bg-blueprint' : 'bg-rule'
+                    }`}
                     title={isOnline ? 'Online' : 'Offline'}
                   />
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="text-base font-bold text-white truncate">{m.name}</p>
-                    {isMemberOwner ? (
-                      <span className="flex items-center gap-1 px-1.5 py-0.5 bg-teal-500/10 text-teal-400 text-[9px] font-bold rounded border border-teal-500/20 shrink-0">
-                        <Sparkles size={8} /> LEAD
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 text-slate-500 text-[9px] font-bold rounded border border-white/5 shrink-0">
-                        MEMBER
-                      </span>
-                    )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <p className="fm-condensed truncate text-[17px] font-bold uppercase leading-none tracking-tight text-ink">
+                      {m.name}
+                    </p>
+                    <Label className="shrink-0 !text-[9px]">
+                      {isMemberOwner ? 'Lead' : 'Member'}
+                    </Label>
                   </div>
-                  <p className="text-xs text-slate-500 truncate">{m.branch || 'University Student'}</p>
+                  <p className="mt-1 truncate font-mono text-[11px] text-graphite">
+                    {m.branch || 'University student'}
+                    {isOnline ? ' · online' : ''}
+                  </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1">
                   {isOwner && m.github && (
-                    <button onClick={() => openGithubIntel(m)} className="p-2 text-emerald-500/50 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-all" title="GitHub Intel">
-                      <Github size={16} />
+                    <button
+                      onClick={() => openGithubIntel(m)}
+                      className="border border-transparent p-2 text-graphite transition-colors hover:border-ink/20 hover:text-blueprint"
+                      title="GitHub intel"
+                    >
+                      <Github size={15} />
                     </button>
                   )}
                   <button
                     onClick={() => m.email ? window.open(`mailto:${m.email}`, '_blank') : alert('No email provided by this user.')}
-                    className="p-2 text-slate-600 hover:text-white hover:bg-white/5 rounded-lg transition-all"
-                    title="Send Email"
+                    className="border border-transparent p-2 text-graphite transition-colors hover:border-ink/20 hover:text-ink"
+                    title="Send email"
                   >
-                    <Mail size={16} />
+                    <Mail size={15} />
                   </button>
                   {isOwner && m.uid !== project.owner_uid && (
-                    <button onClick={() => handleRemoveMember(m.uid)} className="p-2 text-red-500/50 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all" title="Remove">
-                      <Trash2 size={16} />
+                    <button
+                      onClick={() => handleRemoveMember(m.uid)}
+                      className="border border-transparent p-2 text-graphite transition-colors hover:border-ink/20 hover:text-signal"
+                      title="Remove from roster"
+                    >
+                      <Trash2 size={15} />
                     </button>
                   )}
                 </div>
-              </motion.div>
+              </motion.li>
             );
           })}
 
-          {(!project.members_info || project.members_info.length === 0) && (
-            <div className="col-span-full text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-white/5 flex items-center justify-center">
-                <Users size={28} className="text-slate-600" />
-              </div>
-              <p className="text-base text-slate-400 font-semibold">No team members yet</p>
-              <p className="text-sm text-slate-600 mt-1">Be the first to join this project!</p>
-            </div>
+          {members.length === 0 && (
+            <li className="border-b border-dashed border-ink/25 px-4 py-12 text-center">
+              <p className="fm-condensed text-xl font-black uppercase text-ink">Roster empty</p>
+              <p className="mt-1.5 text-sm text-graphite">No one has joined this project yet.</p>
+            </li>
           )}
-        </div>
+        </ul>
 
-        {/* Join Project Action for Non-Members */}
+        {/* Join action */}
         {user && !isOwner && !isMember && (
-          <div className="p-6 bg-black/20 border-t border-white/5 flex justify-center">
-             <button
+          <div className="border-t border-ink/15 p-4">
+            <button
               onClick={() => handleJoin()}
-              className={`w-full max-w-sm font-bold py-4 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm ${
+              className={`group relative flex w-full items-center justify-center gap-2 overflow-hidden px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
                 isRequested
-                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20'
-                  : 'bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white shadow-lg shadow-teal-500/10'
+                  ? 'border border-signal text-signal hover:bg-signal hover:text-paper'
+                  : 'bg-ink text-paper'
               }`}
             >
-              {isRequested
-                ? 'Request Pending (Click to Cancel)'
-                : <><Sparkles size={16} /> Request to Join</>
-              }
+              {!isRequested && (
+                <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+              )}
+              <span className="relative">
+                {isRequested ? 'Request pending — click to cancel' : 'Request to join'}
+              </span>
             </button>
           </div>
         )}
         {!user && (
-          <div className="p-6 bg-black/20 border-t border-white/5 flex justify-center">
-            <button onClick={login} className="w-full max-w-sm bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-teal-500/10 flex items-center justify-center gap-2 text-sm">
-              <Sparkles size={16} /> Sign in to Join Team
+          <div className="border-t border-ink/15 p-4">
+            <button
+              onClick={login}
+              className="group relative flex w-full items-center justify-center overflow-hidden bg-ink px-6 py-3.5 text-[11px] font-semibold uppercase tracking-wider text-paper"
+            >
+              <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+              <span className="relative">Sign in to request a seat</span>
             </button>
           </div>
         )}
-      </div>
+      </Panel>
 
-
-      {/* Pending Applications - Owner Only */}
-      {isOwner && project.join_requests_info?.length > 0 && (
-        <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/5 border border-yellow-500/20 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-32 h-32 bg-yellow-500/10 rounded-full blur-3xl group-hover:bg-yellow-500/20 transition-all"></div>
-
-          <h4 className="text-sm font-black text-yellow-500 uppercase tracking-widest flex items-center gap-2 mb-6 relative z-10">
-            Pending Applications ({project.join_requests_info.length})
-          </h4>
-
-          <div className="space-y-4 relative z-10">
-            {project.join_requests_info.map((req) => {
+      {/* ── Appendix A — vetting ────────────────────────────────────── */}
+      {isOwner && requests.length > 0 && (
+        <Panel
+          caption="Appendix A — applications"
+          meta={<Label className="whitespace-nowrap !text-[10px]">{requests.length} awaiting review</Label>}
+        >
+          <ul>
+            {requests.map((req) => {
               const exam = req.compatibility_exam;
               const score = exam?.totalCompatibilityScore;
-              const scoreColor = score >= 70 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : score >= 45 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : score !== undefined ? 'text-red-400 bg-red-500/10 border-red-500/20' : '';
 
               return (
-              <div key={req.uid} className="bg-black/40 border border-white/5 rounded-xl p-5 transition-all hover:border-yellow-500/30 flex flex-col md:flex-row md:items-center gap-4">
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-sm font-bold text-slate-300">
-                    {req.name.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-base font-bold text-white leading-none mb-1.5">{req.name}</p>
-                    <p className="text-xs text-slate-500 truncate">{req.branch || 'University Student'}</p>
-                  </div>
-                  {score !== undefined && (
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-bold ${scoreColor}`} title="AI Compatibility Score">
-                      <Brain size={12} />
-                      {score}%
+                <li key={req.uid} className="border-b border-rule p-4 last:border-b-0">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                    {/* Identity */}
+                    <div className="flex flex-1 items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center border border-ink/20 bg-paper-deep font-mono text-[13px] font-bold text-ink">
+                        {req.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="fm-condensed truncate text-[17px] font-bold uppercase leading-none tracking-tight text-ink">
+                          {req.name}
+                        </p>
+                        <p className="mt-1 truncate font-mono text-[11px] text-graphite">
+                          {req.branch || 'University student'}
+                        </p>
+                        {score !== undefined && (
+                          <dl className="mt-2 flex items-baseline gap-2">
+                            <dt><Label className="!text-[9px]">Score</Label></dt>
+                            <dd className="fm-condensed text-xl font-black leading-none text-ink">
+                              {score}<span className="text-ink/30">%</span>
+                            </dd>
+                            <dd><Label className="!text-[9px]">{scoreBand(score)}</Label></dd>
+                          </dl>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                <div className="flex-1 lg:pl-4 border-t border-white/5 lg:border-t-0 lg:border-l pt-4 lg:pt-0 mt-4 lg:mt-0">
-                  {req.skills && req.skills.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {req.skills.slice(0, 4).map(s => (
-                        <span key={s} className="px-2 py-1 bg-white/5 text-[10px] text-slate-400 rounded-md border border-white/5">{s}</span>
-                      ))}
-                      {req.skills.length > 4 && <span className="text-xs text-slate-500 pl-1 py-1">+{req.skills.length - 4}</span>}
+                    {/* Declared skills + AI reading */}
+                    <div className="flex-1 border-t border-rule pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+                      {req.skills && req.skills.length > 0 ? (
+                        <div className="mb-3 flex flex-wrap gap-1.5">
+                          {req.skills.slice(0, 4).map(s => (
+                            <span key={s} className="border border-ink/20 px-2 py-0.5 font-mono text-[11px] text-ink">
+                              {s}
+                            </span>
+                          ))}
+                          {req.skills.length > 4 && (
+                            <span className="px-1 py-0.5 font-mono text-[11px] text-graphite">
+                              +{req.skills.length - 4}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mb-3 font-mono text-[11px] text-graphite">— no skills declared</p>
+                      )}
+
+                      {exam && <ExamInsightBlock exam={exam} />}
                     </div>
-                  ) : <span className="text-xs text-slate-600 block mb-3">No skills listed</span>}
-                  
-                  {exam && (
-                    <ExamInsightBlock exam={exam} />
-                  )}
-                </div>
 
-                <div className="flex items-center gap-3">
-                  {req.github && (
-                    <button onClick={() => openGithubIntel(req)} className="p-2 text-emerald-500/40 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors" title="GitHub Intel">
-                      <Github size={18} />
-                    </button>
-                  )}
-                  <button onClick={() => handleAccept(req.uid)} className="bg-teal-500/20 hover:bg-teal-500/30 text-teal-400 text-sm font-bold px-6 py-2.5 rounded-lg border border-teal-500/20 transition-colors">
-                    Accept
-                  </button>
-                  <button onClick={() => handleReject(req.uid)} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-bold px-4 py-2.5 rounded-lg border border-red-500/20 transition-colors">
-                    Decline
-                  </button>
-                </div>
-              </div>
-            )})}
-          </div>
-        </div>
+                    {/* Verdict */}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {req.github && (
+                        <button
+                          onClick={() => openGithubIntel(req)}
+                          className="border border-transparent p-2 text-graphite transition-colors hover:border-ink/20 hover:text-blueprint"
+                          title="GitHub intel"
+                        >
+                          <Github size={16} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleAccept(req.uid)}
+                        className="group relative overflow-hidden bg-ink px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-paper"
+                      >
+                        <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+                        <span className="relative">Accept</span>
+                      </button>
+                      <button
+                        onClick={() => handleReject(req.uid)}
+                        className="border border-ink px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink transition-colors hover:bg-ink hover:text-paper"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
       )}
 
-      {/* GitHub Intel Modal */}
+      {/* ── GitHub Intel Modal ──────────────────────────────────────── */}
       <AnimatePresence>
         {intelModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/60 p-4"
             onClick={() => setIntelModal(null)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.3, ease: EASE }}
               onClick={e => e.stopPropagation()}
-              className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+              className="w-full max-w-lg border border-ink bg-paper-raised"
             >
-              {/* Modal Header */}
-              <div className="p-5 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-b border-white/5 flex items-center justify-between">
+              <div className="flex items-baseline justify-between gap-3 border-b border-ink px-4 py-2.5">
+                <Label className="!text-ink">Appendix B — GitHub record</Label>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-500/20 rounded-xl">
-                    <BarChart3 size={18} className="text-emerald-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-widest">GitHub Intel</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{intelModal.name}</p>
-                  </div>
+                  <Label className="!text-[10px]">{intelModal.name}</Label>
+                  <button onClick={() => setIntelModal(null)} className="text-graphite transition-colors hover:text-ink">
+                    <X size={16} />
+                  </button>
                 </div>
-                <button onClick={() => setIntelModal(null)} className="p-1.5 text-slate-500 hover:text-white transition-colors">
-                  <X size={18} />
-                </button>
               </div>
 
-              {/* Modal Body */}
-              <div className="p-5 max-h-[70vh] overflow-y-auto">
+              <div className="max-h-[70vh] overflow-y-auto p-4">
                 {intelLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-                    <p className="text-xs text-slate-500">Fetching GitHub data...</p>
+                  <div className="flex flex-col items-center justify-center gap-3 py-12">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink/15 border-t-blueprint" />
+                    <Label>Reading public record</Label>
                   </div>
                 ) : intelData?.error ? (
-                  <div className="text-center py-8">
-                    <p className="text-red-400 text-sm">⚠ {intelData.error}</p>
+                  <div className="border border-ink/20 px-4 py-8 text-center">
+                    <p className="fm-condensed text-xl font-black uppercase text-ink">Record unavailable</p>
+                    <p className="mt-1.5 font-mono text-[12px] text-graphite">{intelData.error}</p>
                   </div>
                 ) : intelData ? (
                   <div className="space-y-5">
-                    {/* Profile Card */}
-                    <div className="flex items-center gap-4 p-4 bg-black/30 rounded-xl border border-white/5">
-                      <img src={intelData.avatar} alt="" className="w-14 h-14 rounded-full border-2 border-emerald-500/30" />
-                      <div className="flex-1">
-                        <a href={intelData.profileUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-white hover:text-emerald-400 transition-colors flex items-center gap-1.5">
+                    {/* Identity */}
+                    <div className="flex items-center gap-3 border border-ink/20 p-3">
+                      <img src={intelData.avatar} alt="" className="h-12 w-12 border border-ink/20 object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <a
+                          href={intelData.profileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 font-mono text-[13px] text-ink transition-colors hover:text-blueprint"
+                        >
                           @{intelData.login} <ExternalLink size={10} />
                         </a>
-                        {intelData.bio && <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">{intelData.bio}</p>}
+                        {intelData.bio && (
+                          <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-graphite">{intelData.bio}</p>
+                        )}
                       </div>
                     </div>
 
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-4 gap-2">
+                    {/* Measurements */}
+                    <dl className="grid grid-cols-4 border-t border-ink/20">
                       {[
-                        { label: 'Repos', value: intelData.publicRepos, icon: BookOpen, color: 'text-indigo-400' },
-                        { label: 'Stars', value: intelData.totalStars, icon: Star, color: 'text-yellow-400' },
-                        { label: 'Followers', value: intelData.followers, icon: Users, color: 'text-teal-400' },
-                        { label: 'Following', value: intelData.following, icon: Users, color: 'text-slate-400' },
+                        { label: 'Repos', value: intelData.publicRepos },
+                        { label: 'Stars', value: intelData.totalStars },
+                        { label: 'Followers', value: intelData.followers },
+                        { label: 'Following', value: intelData.following },
                       ].map(stat => (
-                        <div key={stat.label} className="bg-black/40 rounded-xl p-3 text-center border border-white/5">
-                          <stat.icon size={14} className={`${stat.color} mx-auto mb-1.5`} />
-                          <p className="text-lg font-black text-white">{stat.value || 0}</p>
-                          <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{stat.label}</p>
+                        <div key={stat.label} className="border-b border-r border-rule p-3 last:border-r-0">
+                          <dt><Label className="!text-[9px]">{stat.label}</Label></dt>
+                          <dd className="fm-condensed mt-1 text-2xl font-black leading-none text-ink">
+                            {stat.value || 0}
+                          </dd>
                         </div>
                       ))}
-                    </div>
+                    </dl>
 
-                    {/* Top Languages */}
+                    {/* Languages */}
                     {intelData.topLangs?.length > 0 && (
                       <div>
-                        <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                          <Code size={12} /> Top Languages
-                        </h4>
-                        <div className="flex flex-wrap gap-2">
+                        <Label className="!text-[10px]">Languages by repo count</Label>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
                           {intelData.topLangs.map(([lang, count]) => (
-                            <span key={lang} className="px-3 py-1.5 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold rounded-lg border border-emerald-500/20 flex items-center gap-1.5">
+                            <span
+                              key={lang}
+                              className="flex items-center gap-1.5 border border-ink/20 px-2 py-0.5 font-mono text-[11px] text-ink"
+                            >
                               {lang}
-                              <span className="text-emerald-500/50 text-[9px]">{count} repos</span>
+                              <span className="text-graphite">{count}</span>
                             </span>
                           ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Top Repos */}
+                    {/* Notable work */}
                     {intelData.topRepos?.length > 0 && (
                       <div>
-                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                          <BookOpen size={12} /> Notable Projects
-                        </h4>
-                        <div className="space-y-2">
+                        <Label className="!text-[10px]">Notable repositories</Label>
+                        <ul className="mt-2 border-t border-ink/20">
                           {intelData.topRepos.map(repo => (
-                            <a key={repo.id} href={repo.html_url} target="_blank" rel="noopener noreferrer" className="block p-3 bg-black/30 border border-white/5 rounded-lg hover:border-emerald-500/30 transition-all group">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-300 group-hover:text-white transition-colors">{repo.name}</span>
-                                <div className="flex items-center gap-1 text-yellow-500 text-[10px]">
-                                  <Star size={10} /> {repo.stargazers_count}
+                            <li key={repo.id} className="border-b border-rule">
+                              <a
+                                href={repo.html_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group block py-2.5 transition-colors hover:text-blueprint"
+                              >
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <span className="truncate font-mono text-[12px] text-ink transition-colors group-hover:text-blueprint">
+                                    {repo.name}
+                                  </span>
+                                  <span className="flex shrink-0 items-center gap-1 font-mono text-[11px] text-graphite">
+                                    <Star size={10} /> {repo.stargazers_count}
+                                  </span>
                                 </div>
-                              </div>
-                              {repo.description && <p className="text-[10px] text-slate-500 mt-1 truncate">{repo.description}</p>}
-                              <div className="flex items-center gap-2 mt-1.5">
-                                {repo.language && <span className="text-[9px] text-emerald-400/60 font-semibold">{repo.language}</span>}
-                              </div>
-                            </a>
+                                {repo.description && (
+                                  <p className="mt-0.5 truncate text-[12px] text-graphite">{repo.description}</p>
+                                )}
+                                {repo.language && (
+                                  <p className="mt-0.5 font-mono text-[10px] text-graphite">{repo.language}</p>
+                                )}
+                              </a>
+                            </li>
                           ))}
-                        </div>
+                        </ul>
                       </div>
                     )}
                   </div>
@@ -490,38 +568,34 @@ export default function Members() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 p-4"
             onClick={() => { if (!joiningAfterExam) setShowExamModal(false); }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.3, ease: EASE }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#0a0a0f] border border-white/10 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+              className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-ink bg-ink"
             >
-              {/* Modal Header */}
-              <div className="p-5 bg-gradient-to-r from-violet-500/10 to-cyan-500/10 border-b border-white/5 flex items-center justify-between sticky top-0 z-10 backdrop-blur-xl">
+              <div className="sticky top-0 z-10 flex items-baseline justify-between gap-3 border-b border-paper/20 bg-ink px-4 py-2.5">
+                <span className="fm-label text-paper">Appendix C — vetting exam</span>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-violet-500/20 rounded-xl">
-                    <Shield size={18} className="text-violet-400" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-black text-white uppercase tracking-widest">Compatibility Assessment</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Complete to join {project?.title}</p>
-                  </div>
+                  <span className="fm-label !text-[10px] text-paper/50">
+                    Required to join {project?.title}
+                  </span>
+                  {!joiningAfterExam && (
+                    <button
+                      onClick={() => setShowExamModal(false)}
+                      className="text-paper/60 transition-colors hover:text-paper"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
-                {!joiningAfterExam && (
-                  <button
-                    onClick={() => setShowExamModal(false)}
-                    className="p-1.5 text-slate-500 hover:text-white transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                )}
               </div>
 
-              {/* Modal Body */}
               <div className="p-6">
                 <ApplicantCompatibilityExam
                   projectContext={{
@@ -548,47 +622,56 @@ export default function Members() {
   );
 }
 
-// ── Inline helper: Expandable AI insight block for team lead ──────────
+// ── Inline helper: the AI's reading of an applicant, for the team lead ──
 function ExamInsightBlock({ exam }) {
   const [expanded, setExpanded] = useState(false);
   const radar = exam.radarMetrics || {};
 
+  const metrics = [
+    { label: 'Tech fit', value: radar.techFit },
+    { label: 'Culture fit', value: radar.cultureFit },
+    { label: 'Ramp-up', value: radar.speed },
+  ].filter((m) => m.value !== undefined);
+
   return (
-    <div className="mb-3">
+    <div>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-1.5 text-[10px] text-violet-400 hover:text-violet-300 font-semibold uppercase tracking-wider transition-colors mb-2"
+        className="fm-label flex items-center gap-1.5 text-graphite transition-colors hover:text-blueprint"
       >
-        <Brain size={10} />
-        AI Insight
-        {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+        AI reading
+        {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
       </button>
+
       {expanded && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
-          className="space-y-2"
+          className="overflow-hidden"
         >
-          {/* Radar Metric Bars */}
-          {[{ label: 'Tech Fit', value: radar.techFit, color: 'bg-cyan-500' },
-            { label: 'Culture Fit', value: radar.cultureFit, color: 'bg-violet-500' },
-            { label: 'Speed', value: radar.speed, color: 'bg-amber-500' },
-          ].map(m => (
-            m.value !== undefined && (
-              <div key={m.label} className="flex items-center gap-2">
-                <span className="text-[9px] text-slate-500 w-16 shrink-0">{m.label}</span>
-                <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
-                  <div className={`h-full ${m.color} rounded-full`} style={{ width: `${m.value}%` }} />
-                </div>
-                <span className="text-[9px] text-slate-400 w-7 text-right">{m.value}</span>
+          <dl className="mt-2 border-t border-rule">
+            {metrics.map((m) => (
+              <div key={m.label} className="flex items-center gap-3 border-b border-rule py-1.5">
+                <dt className="w-20 shrink-0"><Label className="!text-[9px]">{m.label}</Label></dt>
+                <dd className="flex flex-1 items-center gap-2">
+                  {/* A measured quantity, not a progress bar: ticked scale, value read off the end. */}
+                  <span className="relative h-1.5 flex-1 bg-paper-deep">
+                    <motion.span
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: m.value / 100 }}
+                      transition={{ duration: 0.6, ease: EASE }}
+                      className="absolute inset-y-0 left-0 w-full origin-left bg-ink"
+                    />
+                    <span className="absolute inset-y-0 left-1/2 w-px bg-paper-raised" aria-hidden="true" />
+                  </span>
+                  <span className="w-7 shrink-0 text-right font-mono text-[11px] text-ink">{m.value}</span>
+                </dd>
               </div>
-            )
-          ))}
-          {/* Summary */}
+            ))}
+          </dl>
+
           {exam.summary && (
-            <p className="text-[10px] text-slate-400 italic leading-relaxed mt-1 p-2 bg-violet-500/5 rounded-lg border border-violet-500/10">
-              "{exam.summary}"
-            </p>
+            <p className="mt-2 text-[12px] leading-relaxed text-graphite">{exam.summary}</p>
           )}
         </motion.div>
       )}

@@ -11,6 +11,15 @@
  */
 export const FIELD_MANUAL_ROUTES = ['/', '/discover', '/community'];
 
+/**
+ * Route families whose paths carry an id, so an exact match cannot work:
+ * /projects/:id and every tab beneath it are all one converted group.
+ */
+export const FIELD_MANUAL_PREFIXES = ['/projects/'];
+
 export function isFieldManualRoute(pathname) {
-  return FIELD_MANUAL_ROUTES.includes(pathname);
+  return (
+    FIELD_MANUAL_ROUTES.includes(pathname) ||
+    FIELD_MANUAL_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  );
 }

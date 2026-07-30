@@ -2,16 +2,23 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useWarRoom } from '../context/WarRoomContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, Maximize2, GripHorizontal, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+
+/**
+ * The docked monitor: the war room's call, still running while you read
+ * another sheet. It stays an ink plate on every route — video is dark, and
+ * the same plate reads correctly over drafting paper and over the pages
+ * still awaiting conversion.
+ */
 
 function MiniVideoPlayer({ stream, muted, label }) {
   const ref = useRef();
   useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
   return (
-    <div className="relative w-full h-full bg-black rounded-lg overflow-hidden">
-      <video ref={ref} autoPlay playsInline muted={muted} className="w-full h-full object-cover" />
-      <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-black/70 backdrop-blur rounded text-[8px] text-white font-bold truncate max-w-[80%]">
-        {label}
+    <div className="relative h-full w-full overflow-hidden bg-ink outline outline-1 outline-paper/15">
+      <video ref={ref} autoPlay playsInline muted={muted} className="h-full w-full object-cover" />
+      <div className="absolute bottom-0 left-0 max-w-[85%] truncate bg-ink/85 px-1.5 py-0.5">
+        <span className="fm-label !text-[8px] !tracking-wider text-paper">{label}</span>
       </div>
     </div>
   );
@@ -71,35 +78,41 @@ export default function MiniCallOverlay() {
   const remoteEntries = Object.entries(remoteStreams || {});
   const participantCount = 1 + remoteEntries.length;
 
+  const btn = 'flex items-center justify-center border border-paper/25 text-paper transition-colors hover:bg-paper hover:text-ink';
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.8, y: 20 }}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       style={{ left: pos.x, top: pos.y }}
       className="fixed z-[9999] select-none"
     >
-      <div
-        className={`bg-[#0d0d0d]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden transition-all duration-300 ${collapsed ? 'w-[200px]' : 'w-[320px]'}`}
-      >
+      <div className={`border border-paper/20 bg-ink ${collapsed ? 'w-[200px]' : 'w-[320px]'}`}>
         {/* Header bar — draggable */}
         <div
           onMouseDown={onMouseDown}
-          className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-indigo-600/20 to-teal-600/20 border-b border-white/5 cursor-grab active:cursor-grabbing"
+          className="flex cursor-grab items-center gap-2 border-b border-paper/15 px-2.5 py-1.5 active:cursor-grabbing"
         >
-          <GripHorizontal size={12} className="text-slate-500" />
-          <span className="text-[10px] font-black text-white uppercase tracking-widest flex-1 truncate">
-            War Room • {participantCount} in call
+          <GripHorizontal size={11} className="shrink-0 text-paper/40" />
+          <span className="h-1.5 w-1.5 shrink-0 bg-signal" aria-hidden="true" />
+          <span className="fm-label flex-1 truncate !text-[9px] text-paper">
+            War room · {participantCount} in call
           </span>
-          <button onClick={() => setCollapsed(!collapsed)} className="p-1 text-slate-400 hover:text-white transition-colors" title={collapsed ? "Expand" : "Collapse"}>
-            {collapsed ? <Maximize2 size={12} /> : <X size={12} />}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-0.5 text-paper/50 transition-colors hover:text-paper"
+            title={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? <Maximize2 size={11} /> : <X size={11} />}
           </button>
         </div>
 
         {!collapsed && (
           <>
             {/* Video grid */}
-            <div className="p-2 grid grid-cols-2 gap-1.5" style={{ maxHeight: 160 }}>
+            <div className="grid grid-cols-2 gap-1.5 p-2" style={{ maxHeight: 160 }}>
               {localStream && (
                 <div className="aspect-video">
                   <MiniVideoPlayer stream={localStream} muted={true} label="You" />
@@ -116,42 +129,57 @@ export default function MiniCallOverlay() {
             </div>
 
             {/* Controls */}
-            <div className="flex items-center justify-center gap-2 px-3 py-2 border-t border-white/5">
-              <button onClick={toggleMute} className={`p-2 rounded-full transition-all ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white hover:bg-white/10'}`} title={isMuted ? "Unmute" : "Mute"}>
-                {isMuted ? <MicOff size={14} /> : <Mic size={14} />}
+            <div className="flex items-center justify-center gap-2 border-t border-paper/15 px-3 py-2">
+              <button
+                onClick={toggleMute}
+                className={`${btn} h-8 w-8 ${isMuted ? 'bg-paper text-ink' : ''}`}
+                title={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted ? <MicOff size={13} /> : <Mic size={13} />}
               </button>
-              <button onClick={toggleVideo} className={`p-2 rounded-full transition-all ${isVideoOff ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white hover:bg-white/10'}`} title={isVideoOff ? "Camera On" : "Camera Off"}>
-                {isVideoOff ? <VideoOff size={14} /> : <Video size={14} />}
+              <button
+                onClick={toggleVideo}
+                className={`${btn} h-8 w-8 ${isVideoOff ? 'bg-paper text-ink' : ''}`}
+                title={isVideoOff ? "Camera On" : "Camera Off"}
+              >
+                {isVideoOff ? <VideoOff size={13} /> : <Video size={13} />}
               </button>
-              <button onClick={isScreenSharing ? stopScreenShare : shareScreen} className={`p-2 rounded-full transition-all ${isScreenSharing ? 'bg-amber-500/20 text-amber-400' : 'bg-white/5 text-white hover:bg-white/10'}`} title={isScreenSharing ? "Stop Share" : "Share Screen"}>
-                <Monitor size={14} />
+              <button
+                onClick={isScreenSharing ? stopScreenShare : shareScreen}
+                className={`${btn} h-8 w-8 ${isScreenSharing ? 'bg-paper text-ink' : ''}`}
+                title={isScreenSharing ? "Stop Share" : "Share Screen"}
+              >
+                <Monitor size={13} />
               </button>
-              <button onClick={leaveHuddle} className="p-2 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40 transition-all" title="Leave Call">
-                <PhoneOff size={14} />
+              <button onClick={leaveHuddle} className={`${btn} h-8 w-8`} title="Leave Call">
+                <PhoneOff size={13} />
               </button>
             </div>
 
             {/* Double-click to navigate back */}
             <button
               onDoubleClick={() => navigate(`/projects/${activeProjectId}/warroom`)}
-              className="w-full text-center text-[9px] text-slate-500 hover:text-teal-400 transition-colors py-1.5 border-t border-white/5 cursor-pointer"
+              className="fm-label w-full border-t border-paper/15 py-1.5 text-center !text-[8px] text-paper/45 transition-colors hover:text-paper"
             >
-              Double-click to return to War Room
+              Double-click to return to the war room
             </button>
           </>
         )}
 
         {collapsed && (
           <div className="flex items-center justify-center gap-2 px-3 py-2">
-            <button onClick={toggleMute} className={`p-1.5 rounded-full ${isMuted ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white'}`}>
+            <button
+              onClick={toggleMute}
+              className={`${btn} h-7 w-7 ${isMuted ? 'bg-paper text-ink' : ''}`}
+            >
               {isMuted ? <MicOff size={12} /> : <Mic size={12} />}
             </button>
-            <button onClick={leaveHuddle} className="p-1.5 rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/40">
+            <button onClick={leaveHuddle} className={`${btn} h-7 w-7`}>
               <PhoneOff size={12} />
             </button>
             <button
               onDoubleClick={() => navigate(`/projects/${activeProjectId}/warroom`)}
-              className="p-1.5 rounded-full bg-white/5 text-slate-400 hover:text-teal-400"
+              className={`${btn} h-7 w-7`}
               title="Double-click to return"
             >
               <Maximize2 size={12} />
