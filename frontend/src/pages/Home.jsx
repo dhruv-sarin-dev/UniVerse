@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
-/* eslint-disable no-unused-vars */
 import { motion, AnimatePresence } from 'framer-motion';
-/* eslint-enable no-unused-vars */
 import { Heart, MessageSquare, Share2, Award, Zap, TrendingUp, Code, LogIn, Compass, Rocket } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';

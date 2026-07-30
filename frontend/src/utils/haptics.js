@@ -10,8 +10,8 @@ export const playHaptic = () => {
     // We try to play, but ignore errors if browser blocks autoplay before user interaction
     try {
         popSound.play();
-    } catch (e) {
-        // ignore
+    } catch {
+        // Autoplay is blocked until the first real user gesture; ignore.
     }
 };
 

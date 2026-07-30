@@ -43,3 +43,6 @@ frontend/lint-output.txt
 
 # Local DB dump containing real user UIDs
 check.json
+
+# Agent worktrees created by tooling — never part of the project
+.claude/

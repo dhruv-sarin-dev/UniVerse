@@ -1,12 +1,11 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, Link, Outlet, useLocation } from 'react-router-dom';
 import { ArrowLeft, Sparkles, MessageSquare, Users, BarChart3, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import API_URL from '../../api';
 
 export default function ProjectLayout() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
 
@@ -14,7 +13,9 @@ export default function ProjectLayout() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchProject = async (isInitial = false) => {
+  // Memoised so the mount effect can list it as a dependency without re-firing
+  // on every render. Members.jsx also polls it on an interval.
+  const fetchProject = useCallback(async (isInitial = false) => {
     if (isInitial) setLoading(true);
     try {
       const controller = new AbortController();
@@ -44,11 +45,11 @@ export default function ProjectLayout() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchProject(true);
-  }, [id]);
+  }, [fetchProject]);
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-[60vh]">

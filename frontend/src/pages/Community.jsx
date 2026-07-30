@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-/* eslint-disable no-unused-vars */
 import { motion, AnimatePresence } from 'framer-motion';
-/* eslint-enable no-unused-vars */
 import {
   ChevronUp, ChevronDown, MessageSquare, Send, Trash2,
   TrendingUp, Clock, User, Sparkles, PenLine, Hash, X,
@@ -597,7 +595,11 @@ export default function Community() {
       ]);
       if (leadRes.ok) setTopContributors(await leadRes.json());
       if (trendRes.ok) setTrendingQuestions(await trendRes.json());
-    } catch {}
+    } catch (err) {
+      // Sidebar extras are non-essential, so a failure here must not take the
+      // feed down with it — but swallowing it silently hid real outages.
+      console.warn('Could not load community sidebar data', err);
+    }
   }, []);
 
   const fetchCommunities = useCallback(async () => {
@@ -1079,6 +1081,35 @@ export default function Community() {
               </div>
             </div>
 
+
+            {/* Top contributors — the leaderboard endpoint was already being
+                fetched here but never rendered anywhere. */}
+            <div className="glass-strong rounded-2xl p-5 border border-white/[0.06]">
+              <h4 className="font-bold text-sm mb-3 flex items-center gap-2">
+                <Trophy size={14} className="text-amber-400" /> Top Contributors
+              </h4>
+              <div className="space-y-2.5">
+                {topContributors.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic">No reputation earned yet</p>
+                ) : topContributors.slice(0, 5).map((u, i) => (
+                  <div key={u.uid || i} className="flex items-center gap-2.5">
+                    <span className={`text-[10px] font-bold w-4 shrink-0 ${i === 0 ? 'text-amber-400' : 'text-slate-600'}`}>
+                      {i + 1}
+                    </span>
+                    <img
+                      src={u.photo_url || avatarUrl(u.display_name)}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      className="w-6 h-6 rounded-full border border-white/10 shrink-0"
+                    />
+                    <span className="text-xs text-slate-300 truncate flex-1">{u.display_name}</span>
+                    <span className="flex items-center gap-1 text-[10px] text-neon-teal shrink-0">
+                      <Award size={10} />{u.reputation}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Community stats */}
             <div className="glass-strong rounded-2xl p-5 border border-white/[0.06]">

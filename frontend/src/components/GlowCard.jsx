@@ -6,6 +6,10 @@ const GlowCard = ({ children, className = '', colorClass = 'rgba(255,255,255,0.1
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovered, setIsHovered] = useState(false);
   const [tiltValues, setTiltValues] = useState({ rotateX: 0, rotateY: 0 });
+  // Derived from the pointer position, but kept in state rather than computed
+  // during render: the old version measured the element on every render, which
+  // both reads a ref during render and forces two extra layout reads.
+  const [angle, setAngle] = useState(0);
 
   const handleMouseMove = useCallback((e) => {
     if (!cardRef.current) return;
@@ -13,6 +17,7 @@ const GlowCard = ({ children, className = '', colorClass = 'rgba(255,255,255,0.1
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     setMousePosition({ x, y });
+    setAngle(Math.atan2(y - rect.height / 2, x - rect.width / 2) * (180 / Math.PI) + 180);
 
     if (tilt) {
       // Calculate tilt based on mouse position relative to center
@@ -28,14 +33,6 @@ const GlowCard = ({ children, className = '', colorClass = 'rgba(255,255,255,0.1
     setIsHovered(false);
     setTiltValues({ rotateX: 0, rotateY: 0 });
   }, []);
-
-  // Calculate angle for conic gradient rotation
-  const angle = cardRef.current
-    ? Math.atan2(
-        mousePosition.y - cardRef.current.getBoundingClientRect().height / 2,
-        mousePosition.x - cardRef.current.getBoundingClientRect().width / 2
-      ) * (180 / Math.PI) + 180
-    : 0;
 
   return (
     <motion.div

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useRef, useCallback, useEffect } f
 import API_URL from '../api';
 
 const WarRoomContext = createContext(null);
+// eslint-disable-next-line react-refresh/only-export-components
 export const useWarRoom = () => useContext(WarRoomContext);
 
 // STUN is enough for peers on the same LAN or behind cone NAT. Anyone on a
@@ -55,6 +56,9 @@ export function WarRoomProvider({ children }) {
   const peerConnections = useRef({});
   const userRef = useRef(null);
   const projectRef = useRef(null);
+  // Reactive mirror of projectRef. Consumers that need project data while
+  // rendering (peer name labels, for one) cannot read the ref during render.
+  const [activeProject, setActiveProject] = useState(null);
   // ICE candidates that arrived before the remote description was applied.
   // Adding them early throws and the candidate is lost for good, which is why
   // calls that work on localhost fail across the internet.
@@ -312,6 +316,7 @@ export function WarRoomProvider({ children }) {
   const connectToRoom = useCallback((projectId, user, project) => {
     userRef.current = user;
     projectRef.current = project;
+    setActiveProject(project);
 
     const alreadyHere =
       activeProjectIdRef.current === projectId &&
@@ -358,6 +363,7 @@ export function WarRoomProvider({ children }) {
     }
     socketRef.current = null;
     setActiveProjectId(null);
+    setActiveProject(null);
     setIsConnected(false);
     setMessages([]);
     setSharedNotes('');
@@ -410,26 +416,8 @@ export function WarRoomProvider({ children }) {
     }
   }, []);
 
-  const shareScreen = useCallback(async () => {
-    try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" } });
-      const screenTrack = displayStream.getVideoTracks()[0];
-      Object.values(peerConnections.current).forEach(pc => {
-        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) sender.replaceTrack(screenTrack).catch(e => console.error(e));
-      });
-      if (localStreamRef.current) {
-        const newStream = new MediaStream([screenTrack]);
-        const audioTracks = localStreamRef.current.getAudioTracks();
-        if (audioTracks.length > 0) newStream.addTrack(audioTracks[0]);
-        setLocalStream(newStream);
-        localStreamRef.current = newStream;
-      }
-      setIsScreenSharing(true);
-      screenTrack.onended = () => stopScreenShare();
-    } catch (err) { console.error("Screen Share Failed", err); }
-  }, []);
-
+  // Defined before shareScreen so the latter can list it as a dependency —
+  // shareScreen wires it up as the track's onended handler.
   const stopScreenShare = useCallback(async () => {
     setIsScreenSharing(false);
     try {
@@ -448,6 +436,26 @@ export function WarRoomProvider({ children }) {
       }
     } catch (e) { console.error("Restore Camera Failed", e); }
   }, []);
+
+  const shareScreen = useCallback(async () => {
+    try {
+      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" } });
+      const screenTrack = displayStream.getVideoTracks()[0];
+      Object.values(peerConnections.current).forEach(pc => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) sender.replaceTrack(screenTrack).catch(e => console.error(e));
+      });
+      if (localStreamRef.current) {
+        const newStream = new MediaStream([screenTrack]);
+        const audioTracks = localStreamRef.current.getAudioTracks();
+        if (audioTracks.length > 0) newStream.addTrack(audioTracks[0]);
+        setLocalStream(newStream);
+        localStreamRef.current = newStream;
+      }
+      setIsScreenSharing(true);
+      screenTrack.onended = () => stopScreenShare();
+    } catch (err) { console.error("Screen Share Failed", err); }
+  }, [stopScreenShare]);
 
   // ── MOM controls ──
   const toggleMOM = useCallback(() => {
@@ -535,7 +543,7 @@ export function WarRoomProvider({ children }) {
 
   const value = {
     // Connection
-    activeProjectId, isConnected, connectToRoom, disconnectFromRoom,
+    activeProjectId, activeProject, isConnected, connectToRoom, disconnectFromRoom,
     // Call
     inCall, localStream, remoteStreams, isMuted, isVideoOff, isScreenSharing,
     startHuddle, leaveHuddle, toggleMute, toggleVideo, shareScreen, stopScreenShare,

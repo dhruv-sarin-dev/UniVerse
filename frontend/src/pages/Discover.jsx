@@ -1,9 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Rocket, Map, List, Star, Users, ArrowRight, Plus, Trash2, AlertCircle } from 'lucide-react';
-/* eslint-disable no-unused-vars */
 import { motion, AnimatePresence } from 'framer-motion';
-/* eslint-enable no-unused-vars */
 import API_URL, { fetchJson } from '../api';
 import { useAuth } from '../context/AuthContext';
 import CreateProjectModal from '../components/CreateProjectModal';

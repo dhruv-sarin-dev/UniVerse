@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-/* eslint-disable no-unused-vars */
 import { motion, AnimatePresence } from 'framer-motion';
-/* eslint-enable no-unused-vars */
 import { Search, X, Hash, Users, FileText, MessageSquare } from 'lucide-react';
 
 export default function CommunitySearch({ posts, communities, onSelectCommunity, onClose }) {

@@ -2,9 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useWarRoom } from '../context/WarRoomContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, Maximize2, GripHorizontal, X } from 'lucide-react';
-/* eslint-disable no-unused-vars */
 import { motion, AnimatePresence } from 'framer-motion';
-/* eslint-enable no-unused-vars */
 
 function MiniVideoPlayer({ stream, muted, label }) {
   const ref = useRef();
@@ -28,10 +26,9 @@ export default function MiniCallOverlay() {
   const location = useLocation();
 
   const {
-    inCall, activeProjectId, localStream, remoteStreams,
+    inCall, activeProjectId, activeProject, localStream, remoteStreams,
     isMuted, isVideoOff, isScreenSharing,
     toggleMute, toggleVideo, leaveHuddle, shareScreen, stopScreenShare,
-    userRef, projectRef,
   } = ctx || {};
 
   // Dragging
@@ -109,7 +106,7 @@ export default function MiniCallOverlay() {
                 </div>
               )}
               {remoteEntries.slice(0, 3).map(([uid, stream]) => {
-                const info = projectRef?.current?.members_info?.find(m => m.uid === uid);
+                const info = activeProject?.members_info?.find(m => m.uid === uid);
                 return (
                   <div key={uid} className="aspect-video">
                     <MiniVideoPlayer stream={stream} muted={false} label={info?.name || `Peer`} />

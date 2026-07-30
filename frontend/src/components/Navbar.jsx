@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Code, Users, Rocket, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-/* eslint-disable no-unused-vars */
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
-/* eslint-enable no-unused-vars */
 import MagneticButton from './MagneticButton';
 
 export default function Navbar() {
