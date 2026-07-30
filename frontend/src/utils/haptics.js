@@ -1,29 +1,37 @@
-import { Howl } from 'howler';
+// A short click, played on interactive elements.
+//
+// This used howler, which is a full audio library pulled in to play one
+// sub-second pop. The native Audio element does exactly the same job here,
+// so the dependency was dropped rather than shipped to every visitor.
+const POP_SRC =
+  'data:audio/mp3;base64,//OExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//OExEAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//OExIAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
 
-// Small subtle click sound (base64 encoded short pop to avoid external asset loading issues)
-const popSound = new Howl({
-  src: ['data:audio/mp3;base64,//OExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//OExEAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//OExIAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'],
-  volume: 0.1, // Very subtle by default
-});
+let pop;
 
 export const playHaptic = () => {
-    // We try to play, but ignore errors if browser blocks autoplay before user interaction
-    try {
-        popSound.play();
-    } catch {
-        // Autoplay is blocked until the first real user gesture; ignore.
+  try {
+    // Created lazily so the audio element is never constructed for visitors
+    // who do not interact, and cloned per play so rapid clicks overlap
+    // instead of restarting a single instance.
+    if (!pop) {
+      pop = new Audio(POP_SRC);
+      pop.volume = 0.1;
     }
+    const instance = pop.cloneNode();
+    instance.volume = 0.1;
+    // Autoplay is blocked until the first real gesture; ignore the rejection.
+    instance.play?.().catch(() => {});
+  } catch {
+    // Audio unavailable — the click is decorative, so carry on silently.
+  }
 };
 
 export const setupGlobalHaptics = () => {
-    const handleGlobalClick = (e) => {
-        // Check if the clicked element is a button, a tag, or has a role of button/link
-        const target = e.target.closest('button, a, [role="button"], [role="link"], .bento-card');
-        if (target) {
-            playHaptic();
-        }
-    };
-    
-    document.addEventListener('click', handleGlobalClick);
-    return () => document.removeEventListener('click', handleGlobalClick);
+  const handleGlobalClick = (e) => {
+    const target = e.target.closest('button, a, [role="button"], [role="link"], .bento-card');
+    if (target) playHaptic();
+  };
+
+  document.addEventListener('click', handleGlobalClick);
+  return () => document.removeEventListener('click', handleGlobalClick);
 };

@@ -9,9 +9,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          three: ['three', '@react-three/fiber', '@react-three/drei', '@react-three/postprocessing'],
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
-          motion: ['framer-motion', 'gsap'],
+          motion: ['framer-motion'],
         },
       },
     },

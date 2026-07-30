@@ -10,10 +10,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import CommandPalette from './components/CommandPalette';
 import { setupGlobalHaptics } from './utils/haptics';
-import MeshGradient from './components/MeshGradient';
+import { isFieldManualRoute } from './utils/fieldManualRoutes';
 
-// Lazy-load heavy components
-const CosmicBackground = lazy(() => import('./components/CosmicBackground'));
+// Lazy-load route components
 const Landing = lazy(() => import('./pages/Landing'));
 const Community = lazy(() => import('./pages/Community'));
 const Discover = lazy(() => import('./pages/Discover'));
@@ -29,8 +28,8 @@ const CompatibilityExam = lazy(() => import('./pages/CompatibilityExam'));
 
 function PageFallback() {
   return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="w-8 h-8 border-2 border-neon-blue/20 border-t-neon-blue rounded-full animate-spin" />
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-ink/15 border-t-blueprint" />
     </div>
   );
 }
@@ -79,6 +78,34 @@ function AnimatedRoutes() {
   );
 }
 
+function Shell() {
+  const location = useLocation();
+  const isFieldManual = isFieldManualRoute(location.pathname);
+
+  return (
+    // fm-scope carries the Field Manual focus ring and the reduced-motion
+    // opt-out for everything inside it.
+    <div
+      className={
+        isFieldManual
+          ? 'fm-scope fm-paper relative min-h-screen overflow-x-hidden font-sans text-ink'
+          : 'fm-scope relative min-h-screen overflow-x-hidden bg-[#030303] font-sans text-slate-100'
+      }
+    >
+      <CommandPalette />
+      <div className="relative z-10 flex min-h-screen flex-col">
+        <Navbar />
+        <main className="relative flex-grow">
+          <AnimatedRoutes />
+        </main>
+      </div>
+
+      {/* Persistent floating call overlay */}
+      <MiniCallOverlay />
+    </div>
+  );
+}
+
 export default function App() {
   useEffect(() => {
     const lenis = new Lenis({
@@ -99,24 +126,7 @@ export default function App() {
     <AuthProvider>
       <Router>
         <WarRoomProvider>
-        <div className="min-h-screen bg-[#030303] text-slate-100 font-sans relative overflow-x-hidden">
-          {/* Subtle cosmic background layer */}
-          <div className="absolute inset-0 z-0 opacity-40 pointer-events-none mix-blend-screen">
-             <Suspense fallback={null}><CosmicBackground /></Suspense>
-             <MeshGradient />
-          </div>
-
-          <CommandPalette />
-          <div className="relative z-10 flex flex-col min-h-screen">
-            <Navbar />
-            <main className="flex-grow relative">
-              <AnimatedRoutes />
-            </main>
-          </div>
-
-          {/* Persistent floating call overlay */}
-          <MiniCallOverlay />
-        </div>
+        <Shell />
         </WarRoomProvider>
       </Router>
     </AuthProvider>
