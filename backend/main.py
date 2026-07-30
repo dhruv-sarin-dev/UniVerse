@@ -2,6 +2,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import sys
+
+# Several handlers log with emoji. On Windows the console defaults to cp1252,
+# which cannot encode them, so the print raises UnicodeEncodeError and takes
+# the request down with it — notify_meeting returned a 500 for any project
+# that had members, meaning the owner could not start a War Room call. Forcing
+# UTF-8 here fixes every print at once rather than policing characters at each
+# call site.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

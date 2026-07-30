@@ -177,19 +177,19 @@ if __name__ == "__main__":
     for t in tests:
         name = t.__name__
         try:
-            print(f"\n▶ {name}")
+            print(f"\n[TEST] {name}")
             t()
-            print(f"  ✅ PASSED")
+            print("  PASSED")
             passed += 1
         except AssertionError as e:
-            print(f"  ❌ FAILED: {e}")
+            print(f"  FAILED: {e}")
             failed += 1
         except Exception as e:
-            print(f"  ❌ ERROR: {e}")
+            print(f"  ERROR: {e}")
             failed += 1
 
     print(f"\n{'='*50}")
     print(f"Results: {passed} passed, {failed} failed out of {len(tests)}")
     if failed:
         sys.exit(1)
-    print("All tests passed. ✅")
+    print("All tests passed.")

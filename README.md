@@ -97,10 +97,8 @@
 ### 🎨 Design & UX
 | Feature | Description |
 |---|---|
-| **Cosmic Theme** | Dark-mode-first design with glassmorphism, neon accents, and mesh gradients |
-| **3D Background** | React Three Fiber cosmic particle background on the landing page |
-| **Micro-Animations** | Framer Motion and GSAP power smooth transitions throughout |
-| **Custom Cursor** | Magnetic cursor effect that follows pointer movement |
+| **Field Manual** | Technical-documentation direction: drafting stock, a visible grid, monospace annotation, and figures that measure what they describe |
+| **Drawn, not floating** | Framer Motion is used so the page appears to be *drawn* — rules extend from their origin, display type prints in behind a mask, parse trees type out, scores count up |
 | **Command Palette** | ⌘+K spotlight-style navigation for power users |
 | **PWA Ready** | Installable Progressive Web App with offline support |
 | **Real-Time Presence** | WebSocket-powered online/offline indicators for active users |
@@ -114,14 +112,15 @@
 Uni-Verse/
 ├── frontend/                # React 19 + Vite + Tailwind CSS v4
 │   ├── src/
-│   │   ├── pages/           # Landing, Home, Discover, Onboarding, Profile,
+│   │   ├── pages/           # Landing, Discover, Onboarding, Profile,
 │   │   │                    # Community, CompatibilityExam
 │   │   ├── pages/project/   # ProjectLayout, Overview, Discussion, WarRoom,
 │   │   │                    # Contributions, Members
 │   │   ├── components/      # Navbar, WarRoomChat, ContributionTracker,
-│   │   │                    # CommandPalette, CosmicBackground, GlowCard,
-│   │   │                    # TeamLeadApplicantView, CommunitySearch, etc.
-│   │   └── context/         # AuthContext, WarRoomContext
+│   │   │                    # CommandPalette, CommunitySearch,
+│   │   │                    # TeamLeadApplicantView, MiniCallOverlay, etc.
+│   │   ├── context/         # AuthContext, WarRoomContext
+│   │   └── index.css        # Field Manual design tokens (Tailwind v4 @theme)
 │   └── .env                 # Firebase credentials (see .env.example)
 │
 └── backend/                 # Python FastAPI
@@ -136,8 +135,10 @@ Uni-Verse/
     │   ├── firebase_gate.py     # Score sync & badge logic
     │   ├── github_webhook.py    # Webhook processing & repo scanning
     │   └── email_service.py     # SMTP notification service
+    │   └── auth.py              # Firebase ID token verification
     ├── database.py          # Firestore + local JSON fallback
     ├── firebase.py          # Firebase Admin SDK init
+    ├── tests/               # AST scoring, scan idempotency, auth self-check
     └── .env                 # API keys (see .env.example)
 ```
 
@@ -213,6 +214,8 @@ npm run dev
 | `SMTP_PASSWORD` | Gmail app password for SMTP | Optional |
 | `SMTP_SERVER` | SMTP server (default: `smtp.gmail.com`) | Optional |
 | `SMTP_PORT` | SMTP port (default: `587`) | Optional |
+| `REQUIRE_AUTH` | Enforce Firebase ID tokens on write endpoints. Defaults to `false` | Optional |
+| `ALLOWED_ORIGINS` | Comma-separated CORS origins. Defaults to `*` | Optional |
 
 ### `frontend/.env`
 | Variable | Description |
@@ -223,9 +226,28 @@ npm run dev
 | `VITE_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID |
 | `VITE_FIREBASE_APP_ID` | Firebase app ID |
-| `VITE_API_URL` | Backend API URL (for production deployment) |
+| `VITE_API_URL` | Backend API URL. **Must include the scheme** — a bare hostname breaks both fetch and the War Room socket |
+| `VITE_TURN_URL` | Comma-separated TURN URLs. Optional, see below |
+| `VITE_TURN_USERNAME` | TURN username |
+| `VITE_TURN_CREDENTIAL` | TURN credential |
 
 > ⚠️ **Never commit your `.env` files or `service-account.json` to Git.**
+
+### Turning on authentication
+
+`REQUIRE_AUTH` ships as `false`, which logs a warning and falls back to the
+uid supplied in the request body. **Deploy a frontend build that sends the
+token first, then flip the flag** — enabling it beforehand locks the running
+app out of every write endpoint.
+
+### War Room calls and TURN
+
+Calls use peer-to-peer WebRTC with Google's public STUN servers, which is
+enough when both people are on ordinary home or campus networks. A TURN relay
+is only needed when either peer sits behind a symmetric NAT — most mobile
+data, and many locked-down campus networks. Leaving the `VITE_TURN_*`
+variables empty is supported and logs a warning in production rather than
+failing.
 
 ---
 
