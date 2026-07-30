@@ -24,6 +24,10 @@ from database import get_collection, get_document, update_document
 
 GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "")
 
+# Each deep-analysed commit costs one GitHub API call, and unauthenticated
+# clients get 60/hour. Cap the deep scan and report the truncation.
+DEEP_SCAN_COMMIT_LIMIT = 15
+
 
 def verify_signature(payload_body: bytes, signature: str) -> bool:
     """Verify GitHub webhook HMAC-SHA256 signature."""
@@ -116,6 +120,19 @@ def fetch_commit_diff(owner: str, repo: str, sha: str) -> str:
     except Exception:
         pass
     return ""
+
+
+def count_diff_lines(diff: str) -> tuple:
+    """Count (additions, deletions) in a unified diff, ignoring file headers."""
+    additions = deletions = 0
+    for line in diff.splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        if line.startswith("+"):
+            additions += 1
+        elif line.startswith("-"):
+            deletions += 1
+    return additions, deletions
 
 
 def fetch_pr_diff(owner: str, repo: str, pr_number: int) -> str:
@@ -252,8 +269,11 @@ def process_pr_event(payload: Dict[str, Any]) -> Dict:
 
 def scan_repo_contributions(project_id: str) -> Dict:
     """
-    Fast scan using GitHub Contributors + Commits API — 2 instant API calls.
-    No retries, no 202 responses, completes in <1 second.
+    Scan a project's linked repo and score contributors with the AST engine.
+
+    Pulls the recent commit list, then fetches and analyses the diff of up to
+    DEEP_SCAN_COMMIT_LIMIT of them. Scores replace (not accumulate) the stored
+    per-project score, so re-scanning is idempotent.
     """
     print(f"[SCAN] Starting scan for project: {project_id}")
     project = get_document("projects", project_id)
@@ -307,57 +327,65 @@ def scan_repo_contributions(project_id: str) -> Dict:
     contributors = r1.json() if r1 and r1.status_code == 200 else []
     recent = r2.json() if r2 and r2.status_code == 200 else []
 
-    if not contributors and not recent:
-        return {"error": "Could not fetch repo data (check repo visibility or GITHUB_TOKEN)"}
+    # Commits are what we score. Without them there is nothing honest to report,
+    # so fail loudly instead of overwriting the cached scan with zeros.
+    if not recent:
+        return {"error": "Could not fetch commits (check repo visibility or GITHUB_TOKEN)"}
 
-    # ── Build contributor scores from /contributors API ──────────────────
+    # ── Deep-analyse commit diffs with the AST engine ────────────────────
+    engine = ASTEngine.instance()
     contributor_scores: Dict[str, Dict] = {}
-
-    if contributors and isinstance(contributors, list):
-        for entry in contributors:
-            login = entry.get("login", "unknown")
-            commit_count = entry.get("contributions", 0)
-            # Score based on commit count (simple, fast, deterministic)
-            score = commit_count * 100
-            contributor_scores[login] = {
-                "total_score": score,
-                "commits": commit_count,
-                "additions": 0,
-                "deletions": 0,
-                "functions": 0,
-                "classes": 0,
-                "conditionals": 0,
-            }
-    else:
-        # Fallback: count from recent commits
-        for c in recent:
-            author_login = (c.get("author") or {}).get("login", "")
-            if not author_login:
-                author_login = c.get("commit", {}).get("author", {}).get("name", "unknown")
-            if author_login not in contributor_scores:
-                contributor_scores[author_login] = {
-                    "total_score": 0, "commits": 0,
-                    "additions": 0, "deletions": 0,
-                    "functions": 0, "classes": 0, "conditionals": 0,
-                }
-            contributor_scores[author_login]["commits"] += 1
-            contributor_scores[author_login]["total_score"] += 100
-
-    # ── Build commit log ─────────────────────────────────────────────────
     commit_log: List[Dict] = []
+    analyzed = 0
+    unavailable = 0
+
     for c in recent:
         sha = c.get("sha", "")
         author_login = (c.get("author") or {}).get("login", "")
         if not author_login:
             author_login = c.get("commit", {}).get("author", {}).get("name", "unknown")
-        commit_log.append({
+
+        entry = {
             "sha": sha[:7],
             "author": author_login,
             "message": c.get("commit", {}).get("message", "").split("\n")[0][:80],
             "date": c.get("commit", {}).get("author", {}).get("date", ""),
             "score": 0,
             "penalized": False,
+            "analyzed": False,
+        }
+        commit_log.append(entry)
+
+        if analyzed >= DEEP_SCAN_COMMIT_LIMIT or not sha:
+            continue
+
+        diff = fetch_commit_diff(owner, repo, sha)
+        if not diff:
+            # Private/huge/removed commit — count it as unscored rather than
+            # guessing a score or blowing up the whole scan.
+            unavailable += 1
+            continue
+
+        scoring = engine.analyze_commit(diff)
+        additions, deletions = count_diff_lines(diff)
+
+        bucket = contributor_scores.setdefault(author_login, {
+            "total_score": 0, "commits": 0,
+            "additions": 0, "deletions": 0,
+            "functions": 0, "classes": 0, "conditionals": 0,
         })
+        bucket["total_score"] += scoring.score
+        bucket["commits"] += 1
+        bucket["additions"] += additions
+        bucket["deletions"] += deletions
+        bucket["functions"] += scoring.functions
+        bucket["classes"] += scoring.classes
+        bucket["conditionals"] += scoring.conditionals
+
+        entry["score"] = scoring.score
+        entry["penalized"] = scoring.penalized
+        entry["analyzed"] = True
+        analyzed += 1
 
     # ── Percentages + Firebase sync ──────────────────────────────────────
     grand_total = sum(c["total_score"] for c in contributor_scores.values())
@@ -366,14 +394,22 @@ def scan_repo_contributions(project_id: str) -> Dict:
         data["uid"] = uid
         data["github"] = gh_username
         data["percentage"] = round((data["total_score"] / grand_total * 100), 1) if grand_total > 0 else 0
-        if data["total_score"] > 0:
-            FirebaseGate.sync_score(uid, project_id, data["total_score"])
+        # set_score, not sync_score: a scan recomputes the same commits every
+        # run, so accumulating would inflate the total on every re-scan.
+        FirebaseGate.set_score(uid, project_id, data["total_score"])
+
+    commits_total = sum(e.get("contributions", 0) for e in contributors) if contributors else None
 
     scan_result = {
         "contributors": contributor_scores,
         "commit_log": commit_log,
         "grand_total": grand_total,
-        "commits_analyzed": sum(c["commits"] for c in contributor_scores.values()),
+        "commits_analyzed": analyzed,
+        "commits_listed": len(recent),
+        "commits_total": commits_total,
+        "commits_unavailable": unavailable,
+        "deep_scan_limit": DEEP_SCAN_COMMIT_LIMIT,
+        "truncated": commits_total is not None and analyzed < commits_total,
         "repo": f"{owner}/{repo}",
     }
     update_document("projects", project_id, {"contribution_scan": scan_result})

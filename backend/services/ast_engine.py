@@ -148,13 +148,18 @@ class ASTEngine:
         if not is_diff:
             return diff
 
+        # ponytail: the parser only speaks Python, so anything else in the diff
+        # is noise that still inflates total_chars and trips the density
+        # penalty. Skip it. Add more grammars here if the engine learns them.
         added: list[str] = []
+        include = True
         for line in lines:
-            if line.startswith("+++") or line.startswith("---"):
+            if line.startswith("+++"):
+                include = line.rstrip().endswith(".py")
                 continue
-            if line.startswith("@@"):
+            if line.startswith("---") or line.startswith("@@"):
                 continue
-            if line.startswith("+"):
+            if include and line.startswith("+"):
                 added.append(line[1:])
         return "".join(added)
 
