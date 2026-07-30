@@ -32,6 +32,48 @@ export default function Navbar() {
 
   if (loading) return null;
 
+  // The Landing page is drafting paper, so the dark glass bar would sit on it
+  // like a foreign object. Field Manual pages get a flat masthead instead:
+  // a rule, a wordmark and plain links. Every other route is untouched.
+  if (location.pathname === '/') {
+    return (
+      <nav className="fm-scope fixed top-0 z-50 w-full border-b border-ink bg-paper">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+          <Link to="/" className="flex items-baseline gap-2">
+            <span className="fm-condensed text-xl font-black uppercase tracking-tight text-ink">
+              Uni-Verse
+            </span>
+            <span className="fm-label hidden text-graphite sm:inline">Field Manual</span>
+          </Link>
+
+          <div className="flex items-center gap-5 sm:gap-7">
+            {navLinks.map((link) => (
+              <Link
+                key={link.name}
+                to={link.path}
+                className="fm-label text-graphite transition-colors hover:text-blueprint"
+              >
+                {link.name}
+              </Link>
+            ))}
+            {user ? (
+              <Link to="/profile" className="fm-label text-ink transition-colors hover:text-blueprint">
+                {user.display_name?.split(' ')[0] || 'Profile'}
+              </Link>
+            ) : (
+              <button
+                onClick={login}
+                className="bg-ink px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-blueprint"
+              >
+                Sign in
+              </button>
+            )}
+          </div>
+        </div>
+      </nav>
+    );
+  }
+
   return (
     <motion.nav
       initial={{ y: -100 }}
