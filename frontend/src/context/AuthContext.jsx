@@ -5,6 +5,44 @@ import API_URL from '../api';
 
 const AuthContext = createContext();
 
+/** The signed-in user's Firebase ID token, or null when signed out. */
+// eslint-disable-next-line react-refresh/only-export-components
+export async function getIdToken() {
+  try {
+    return (await auth?.currentUser?.getIdToken()) || null;
+  } catch (err) {
+    console.warn("Could not get an ID token", err);
+    return null;
+  }
+}
+
+// The backend now reads the acting uid from this header instead of trusting
+// whatever uid the request body claims. API calls are spread over a dozen
+// components, so rather than touch every one of them we attach the header
+// once, here, to any request aimed at our own API.
+// ponytail: a fetch wrapper in api.js would be tidier — move it there once the
+// other work in flight on that file has landed.
+let fetchPatched = false;
+function attachAuthHeaderToApiCalls() {
+  if (fetchPatched) return;
+  fetchPatched = true;
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : input?.url || '';
+    if (!url.startsWith(API_URL)) return originalFetch(input, init);
+
+    const token = await getIdToken();
+    if (!token) return originalFetch(input, init);
+
+    const headers = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
+    if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+    return originalFetch(input, { ...init, headers });
+  };
+}
+
+attachAuthHeaderToApiCalls();
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -160,7 +198,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, updateUser, onlineUsers }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, onlineUsers, getIdToken }}>
       {!loading && children}
     </AuthContext.Provider>
   );
