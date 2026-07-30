@@ -201,10 +201,25 @@ export default function ContributionTracker({ projectId, isOwner }) {
                         >
                             {/* Summary stats */}
                             <div className="grid grid-cols-3 gap-2 mb-6">
-                                <StatPill icon={GitCommit} label="Commits" value={data.commits_analyzed || 0} color="text-blue-400" />
+                                <StatPill
+                                    icon={GitCommit}
+                                    label="Analyzed"
+                                    value={data.commits_total
+                                        ? `${data.commits_analyzed || 0} / ${data.commits_total}`
+                                        : (data.commits_analyzed || 0)}
+                                    color="text-blue-400"
+                                />
                                 <StatPill icon={TrendingUp} label="Total Score" value={grandTotal} color="text-emerald-400" />
                                 <StatPill icon={Code} label="Repo" value={data.repo || '—'} color="text-purple-400" />
                             </div>
+
+                            {data.truncated && (
+                                <p className="text-[10px] text-slate-600 -mt-4 mb-5 leading-relaxed">
+                                    Scores cover the {data.commits_analyzed} most recently analyzed commits
+                                    (deep-scan cap {data.deep_scan_limit}), not the repo&apos;s full{' '}
+                                    {data.commits_total}-commit history.
+                                </p>
+                            )}
 
                             {/* Contribution Bars */}
                             <div className="space-y-4 mb-6">

@@ -63,6 +63,34 @@ class FirebaseGate:
         })
         return updated
 
+    @staticmethod
+    def set_score(uid: str, project_id: str, points: int) -> int:
+        """
+        Replace (not increment) the user's contribution_score for a project.
+
+        Used by the repo scan, which recomputes the same commits every run —
+        adding there would inflate totals on every re-scan.
+        Returns the stored score.
+        """
+        user = get_document("users", uid)
+        if not user:
+            upsert_document("users", uid, {
+                "uid": uid,
+                "contribution_scores": {project_id: points},
+                "contribution_score": points,
+                "is_verified": True,
+            })
+            return points
+
+        scores: dict = user.get("contribution_scores", {})
+        scores[project_id] = points
+
+        update_document("users", uid, {
+            "contribution_scores": scores,
+            "contribution_score": sum(scores.values()),
+        })
+        return points
+
     # ── Team Evaluation ─────────────────────────────────────────────────
     @staticmethod
     def evaluate_team(project_id: str) -> Optional[TeamEvaluation]:
