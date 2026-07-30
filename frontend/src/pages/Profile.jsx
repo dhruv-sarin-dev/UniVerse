@@ -6,6 +6,11 @@ import { Rocket, GraduationCap, Github, Briefcase, Plus, X } from 'lucide-react'
 export default function Profile() {
   const { user, updateUser } = useAuth();
   const [formData, setFormData] = useState({
+    // display_name is bound to an input below. Leaving it out of the initial
+    // state makes that input start uncontrolled and flip to controlled once
+    // the profile loads, which React warns about and which drops whatever the
+    // user typed in the meantime.
+    display_name: '',
     branch: '',
     year: '',
     github: '',
@@ -19,27 +24,35 @@ export default function Profile() {
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
-    if (user) {
-      fetch(`${API_URL}/api/users/${user.uid}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.id) { // Not a 404
-            setFormData({
-              display_name: data.display_name || user.display_name || '',
-              branch: data.branch || '',
-              year: data.year || '',
-              github: data.github || '',
-              bio: data.bio || ''
-            });
-            setSkills(data.skills || []);
-          }
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
-          setLoading(false);
-        });
+    if (!user) {
+      // Nothing to fetch. Leaving loading true pinned signed-out visitors on
+      // "Loading profile..." forever, since nothing else ever cleared it.
+      setLoading(false);
+      return;
     }
+    fetch(`${API_URL}/api/users/${user.uid}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.id) { // Existing profile — new users come back without one
+          setFormData({
+            display_name: data.display_name || user.display_name || '',
+            branch: data.branch || '',
+            year: data.year || '',
+            github: data.github || '',
+            bio: data.bio || ''
+          });
+          setSkills(data.skills || []);
+        } else {
+          // No saved profile yet: seed the name from the signed-in account so
+          // the field is not blank on a first visit.
+          setFormData(prev => ({ ...prev, display_name: user.display_name || '' }));
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
   }, [user]);
 
   const handleAddSkill = (e) => {
@@ -125,6 +138,17 @@ export default function Profile() {
   };
 
   if (loading) return <div className="text-center pt-20 text-slate-400">Loading profile...</div>;
+
+  // /profile is not behind an auth guard, so a signed-out visitor could reach
+  // an empty form whose submit handler dereferences user.uid and throws.
+  if (!user) return (
+    <div className="min-h-[70vh] flex items-center justify-center pt-28 pb-20 px-4">
+      <div className="glass-strong rounded-3xl p-12 border border-white/5 max-w-md w-full text-center">
+        <h2 className="text-2xl font-bold text-white mb-3">Sign in to view your profile</h2>
+        <p className="text-slate-400 text-sm">You need an account before you can edit your details.</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center animate-in fade-in duration-500 pt-28 pb-20">

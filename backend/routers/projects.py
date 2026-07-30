@@ -63,10 +63,14 @@ def get_single_project(project_id: str):
                 "branch": profile.get("branch", ""),
                 "skills": profile.get("skills", []),
                 "bio": profile.get("bio", ""),
-                "github": profile.get("github", "")
+                "github": profile.get("github", ""),
+                # The members panel renders m.photo_url and falls back to an
+                # initial when it is missing. It was never sent, so every
+                # member showed as an initial regardless of their avatar.
+                "photo_url": profile.get("photo_url", ""),
             })
         else:
-            members_resolved.append({"uid": uid, "name": "Unknown", "email": "No profile yet", "branch": "", "skills": [], "github": ""})
+            members_resolved.append({"uid": uid, "name": "Unknown", "email": "No profile yet", "branch": "", "skills": [], "github": "", "photo_url": ""})
             
     # Resolve join requests — attach compatibility exam data if available
     request_uids = proj.get("join_requests", [])

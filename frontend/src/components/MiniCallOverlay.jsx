@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useWarRoom } from '../context/WarRoomContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Mic, MicOff, Video, VideoOff, PhoneOff, Monitor, Maximize2, GripHorizontal, X } from 'lucide-react';
 /* eslint-disable no-unused-vars */
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +22,10 @@ function MiniVideoPlayer({ stream, muted, label }) {
 export default function MiniCallOverlay() {
   const ctx = useWarRoom();
   const navigate = useNavigate();
+  // useLocation, not window.location: the latter is read during render and
+  // never re-reads on client-side navigation, so the overlay's visibility
+  // would stay frozen at whatever the URL was when the call started.
+  const location = useLocation();
 
   const {
     inCall, activeProjectId, localStream, remoteStreams,
@@ -59,8 +63,10 @@ export default function MiniCallOverlay() {
   // Don't render if no active call
   if (!inCall || !activeProjectId) return null;
 
-  // Check if user is currently on the war room page for this project
-  const isOnWarRoomPage = window.location.pathname === `/projects/${activeProjectId}`;
+  // The War Room lives at /projects/:id/warroom. Comparing against
+  // /projects/:id matched the Overview tab instead, so the overlay hid on the
+  // one page it should show on and floated over the full-size call grid.
+  const isOnWarRoomPage = location.pathname === `/projects/${activeProjectId}/warroom`;
 
   // If user is on the war-room page, don't show the mini overlay
   if (isOnWarRoomPage) return null;
@@ -130,7 +136,7 @@ export default function MiniCallOverlay() {
 
             {/* Double-click to navigate back */}
             <button
-              onDoubleClick={() => navigate(`/projects/${activeProjectId}?tab=warroom`)}
+              onDoubleClick={() => navigate(`/projects/${activeProjectId}/warroom`)}
               className="w-full text-center text-[9px] text-slate-500 hover:text-teal-400 transition-colors py-1.5 border-t border-white/5 cursor-pointer"
             >
               Double-click to return to War Room
@@ -147,7 +153,7 @@ export default function MiniCallOverlay() {
               <PhoneOff size={12} />
             </button>
             <button
-              onDoubleClick={() => navigate(`/projects/${activeProjectId}?tab=warroom`)}
+              onDoubleClick={() => navigate(`/projects/${activeProjectId}/warroom`)}
               className="p-1.5 rounded-full bg-white/5 text-slate-400 hover:text-teal-400"
               title="Double-click to return"
             >
