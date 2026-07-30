@@ -13,9 +13,10 @@ import ApplicantCompatibilityExam from '../../components/ApplicantCompatibilityE
  * the AI measured about an applicant — the compatibility score and its radar
  * metrics — is set in mono, because those are readings, not decoration.
  *
- * The compatibility exam modal keeps a dark plate: the exam component it
- * wraps is not part of this conversion and renders light-on-dark, so an
- * inverted appendix is the honest way to host it.
+ * The compatibility exam is hosted here as an appendix. It was briefly an
+ * inverted dark plate, because the exam component still rendered
+ * light-on-dark while it awaited its own conversion; now that it is on
+ * paper too, the appendix matches the rest of the manual.
  */
 
 const EASE = [0.16, 1, 0.3, 1];
@@ -577,18 +578,18 @@ export default function Members() {
               exit={{ opacity: 0, y: 20 }}
               transition={{ duration: 0.3, ease: EASE }}
               onClick={(e) => e.stopPropagation()}
-              className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-ink bg-ink"
+              className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-ink bg-paper-raised"
             >
-              <div className="sticky top-0 z-10 flex items-baseline justify-between gap-3 border-b border-paper/20 bg-ink px-4 py-2.5">
-                <span className="fm-label text-paper">Appendix C — vetting exam</span>
+              <div className="sticky top-0 z-10 flex items-baseline justify-between gap-3 border-b border-ink/20 bg-paper-raised px-4 py-2.5">
+                <span className="fm-label !text-ink">Appendix C — vetting exam</span>
                 <div className="flex items-center gap-3">
-                  <span className="fm-label !text-[10px] text-paper/50">
+                  <span className="fm-label !text-[10px] text-graphite">
                     Required to join {project?.title}
                   </span>
                   {!joiningAfterExam && (
                     <button
                       onClick={() => setShowExamModal(false)}
-                      className="text-paper/60 transition-colors hover:text-paper"
+                      className="text-graphite transition-colors hover:text-signal"
                     >
                       <X size={16} />
                     </button>

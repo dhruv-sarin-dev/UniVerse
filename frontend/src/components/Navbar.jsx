@@ -3,7 +3,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence, useScroll, useSpring } from 'framer-motion';
-import { isFieldManualRoute } from '../utils/fieldManualRoutes';
 
 /**
  * Masthead.
@@ -34,17 +33,17 @@ export default function Navbar() {
 
   if (loading) return null;
 
-  const fm = isFieldManualRoute(location.pathname);
+  // Every route is on drafting paper now, so the masthead has one palette.
   const c = {
-    bar: fm ? 'border-ink bg-paper' : 'border-white/10 bg-[#0a0a0f]',
-    wordmark: fm ? 'text-ink' : 'text-white',
-    muted: fm ? 'text-graphite' : 'text-slate-400',
-    strong: fm ? '!text-ink' : '!text-white',
-    hover: fm ? 'hover:text-blueprint' : 'hover:text-white',
-    cta: fm ? 'bg-ink text-paper' : 'bg-white text-black',
-    ctaFill: fm ? 'bg-blueprint' : 'bg-neon-blue',
-    panel: fm ? 'border-rule bg-paper' : 'border-white/10 bg-[#0a0a0f]',
-    divider: fm ? 'border-rule' : 'border-white/10',
+    bar: 'border-ink bg-paper',
+    wordmark: 'text-ink',
+    muted: 'text-graphite',
+    strong: '!text-ink',
+    hover: 'hover:text-blueprint',
+    cta: 'bg-ink text-paper',
+    ctaFill: 'bg-blueprint',
+    panel: 'border-rule bg-paper',
+    divider: 'border-rule',
   };
 
   return (

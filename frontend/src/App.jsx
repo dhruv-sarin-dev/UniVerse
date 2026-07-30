@@ -10,7 +10,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import CommandPalette from './components/CommandPalette';
 import { setupGlobalHaptics } from './utils/haptics';
-import { isFieldManualRoute } from './utils/fieldManualRoutes';
 
 // Lazy-load route components
 const Landing = lazy(() => import('./pages/Landing'));
@@ -79,19 +78,10 @@ function AnimatedRoutes() {
 }
 
 function Shell() {
-  const location = useLocation();
-  const isFieldManual = isFieldManualRoute(location.pathname);
-
   return (
     // fm-scope carries the Field Manual focus ring and the reduced-motion
     // opt-out for everything inside it.
-    <div
-      className={
-        isFieldManual
-          ? 'fm-scope fm-paper relative min-h-screen overflow-x-hidden font-sans text-ink'
-          : 'fm-scope relative min-h-screen overflow-x-hidden bg-[#030303] font-sans text-slate-100'
-      }
-    >
+    <div className="fm-scope fm-paper relative min-h-screen overflow-x-hidden font-sans text-ink">
       <CommandPalette />
       <div className="relative z-10 flex min-h-screen flex-col">
         <Navbar />
