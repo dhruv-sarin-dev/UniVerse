@@ -4,19 +4,45 @@ import API_URL from '../api';
 const WarRoomContext = createContext(null);
 export const useWarRoom = () => useContext(WarRoomContext);
 
-const rtcConfig = { iceServers: [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' },
-] };
+// STUN is enough for peers on the same LAN or behind cone NAT. Anyone on a
+// symmetric NAT / restrictive mobile network needs TURN to connect at all.
+// The old hardcoded openrelay.metered.ca servers are defunct, so TURN is now
+// supplied per-deployment via env. Without it, cross-network calls may fail.
+const TURN_URL = import.meta.env.VITE_TURN_URL;
+const TURN_USERNAME = import.meta.env.VITE_TURN_USERNAME;
+const TURN_CREDENTIAL = import.meta.env.VITE_TURN_CREDENTIAL;
+
+const iceServers = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+];
+
+if (TURN_URL) {
+  iceServers.push({
+    urls: TURN_URL.split(',').map(u => u.trim()).filter(Boolean),
+    username: TURN_USERNAME,
+    credential: TURN_CREDENTIAL,
+  });
+} else if (import.meta.env.PROD) {
+  console.warn(
+    '[WarRoom] No TURN server configured (VITE_TURN_URL). Calls between users ' +
+    'on different networks will fail whenever either side is behind a symmetric NAT.'
+  );
+}
+
+const rtcConfig = { iceServers };
 
 export function WarRoomProvider({ children }) {
   // ── Connection state ──
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef(null);
+  // Mirrors activeProjectId. connectToRoom must keep a stable identity or the
+  // effect that calls it re-fires and opens a duplicate socket, so it reads the
+  // ref instead of closing over the state value.
+  const activeProjectIdRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  const reconnectAttemptsRef = useRef(0);
+  const intentionalCloseRef = useRef(false);
 
   // ── Call state ──
   const [inCall, setInCall] = useState(false);
@@ -29,6 +55,12 @@ export function WarRoomProvider({ children }) {
   const peerConnections = useRef({});
   const userRef = useRef(null);
   const projectRef = useRef(null);
+  // ICE candidates that arrived before the remote description was applied.
+  // Adding them early throws and the candidate is lost for good, which is why
+  // calls that work on localhost fail across the internet.
+  const pendingCandidates = useRef({});
+  // Perfect-negotiation bookkeeping, per peer uid.
+  const makingOffer = useRef({});
 
   // ── Chat state ──
   const [messages, setMessages] = useState([]);
@@ -68,49 +100,134 @@ export function WarRoomProvider({ children }) {
     recognitionRef.current = recognition;
   }, []);
 
-  // ── WebRTC helpers ──
-  const createPeerConnection = useCallback(async (peerUid, isInitiator) => {
-    if (peerConnections.current[peerUid]) return peerConnections.current[peerUid];
-    const pc = new RTCPeerConnection(rtcConfig);
-    peerConnections.current[peerUid] = pc;
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
-    }
-    pc.onicecandidate = (e) => {
-      if (e.candidate && socketRef.current) {
-        socketRef.current.send(JSON.stringify({ type: 'webrtc_ice', sender: userRef.current?.uid, target: peerUid, payload: e.candidate }));
-      }
-    };
-    pc.ontrack = (e) => setRemoteStreams(prev => ({ ...prev, [peerUid]: e.streams[0] }));
-    if (isInitiator) {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socketRef.current.send(JSON.stringify({ type: 'webrtc_offer', sender: userRef.current?.uid, target: peerUid, payload: offer }));
-    }
-    return pc;
+  // ── Signalling helper ──
+  // Every send must check readyState. The socket is CONNECTING right after it
+  // is created and CLOSED during a reconnect; send() throws in both states.
+  const sendSignal = useCallback((payload) => {
+    const socket = socketRef.current;
+    if (socket?.readyState !== WebSocket.OPEN) return false;
+    socket.send(JSON.stringify(payload));
+    return true;
   }, []);
 
+  // ── WebRTC helpers ──
+  // Politeness has to be deterministic and opposite on the two peers, so derive
+  // it from the uid pair: the lexicographically smaller uid is the polite one.
+  const isPolite = useCallback((peerUid) => (userRef.current?.uid || '') < peerUid, []);
+
+  const flushCandidates = useCallback(async (peerUid, pc) => {
+    const queued = pendingCandidates.current[peerUid];
+    if (!queued?.length) return;
+    delete pendingCandidates.current[peerUid];
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn('[WarRoom] Dropped queued ICE candidate', err);
+      }
+    }
+  }, []);
+
+  const createPeerConnection = useCallback((peerUid) => {
+    const existing = peerConnections.current[peerUid];
+    if (existing) return existing;
+
+    const pc = new RTCPeerConnection(rtcConfig);
+    peerConnections.current[peerUid] = pc;
+    makingOffer.current[peerUid] = false;
+
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current));
+    }
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) {
+        sendSignal({ type: 'webrtc_ice', sender: userRef.current?.uid, target: peerUid, payload: e.candidate });
+      }
+    };
+
+    pc.ontrack = (e) => setRemoteStreams(prev => ({ ...prev, [peerUid]: e.streams[0] }));
+
+    // Let the browser decide when to renegotiate (tracks added, camera swapped
+    // for a screen share) rather than offering by hand at one fixed moment.
+    pc.onnegotiationneeded = async () => {
+      try {
+        makingOffer.current[peerUid] = true;
+        await pc.setLocalDescription();
+        sendSignal({ type: 'webrtc_offer', sender: userRef.current?.uid, target: peerUid, payload: pc.localDescription });
+      } catch (err) {
+        console.error('[WarRoom] Negotiation failed', err);
+      } finally {
+        makingOffer.current[peerUid] = false;
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      // ICE usually dies because no relay candidate was viable. A restart is
+      // cheap and often recovers a call that would otherwise hang on a black tile.
+      if (pc.connectionState === 'failed') pc.restartIce?.();
+    };
+
+    return pc;
+  }, [sendSignal]);
+
   const handleOffer = useCallback(async (peerUid, offer) => {
-    const pc = await createPeerConnection(peerUid, false);
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socketRef.current.send(JSON.stringify({ type: 'webrtc_answer', sender: userRef.current?.uid, target: peerUid, payload: answer }));
-  }, [createPeerConnection]);
+    const pc = createPeerConnection(peerUid);
+    const collision = makingOffer.current[peerUid] || pc.signalingState !== 'stable';
+
+    // Impolite peer ignores a colliding offer; the polite peer rolls its own
+    // offer back and accepts. Without this, two people clicking Join Call at the
+    // same moment both sit in have-local-offer and no media ever flows.
+    if (collision && !isPolite(peerUid)) return;
+
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      await flushCandidates(peerUid, pc);
+      await pc.setLocalDescription();
+      sendSignal({ type: 'webrtc_answer', sender: userRef.current?.uid, target: peerUid, payload: pc.localDescription });
+    } catch (err) {
+      console.error('[WarRoom] Failed to handle offer', err);
+    }
+  }, [createPeerConnection, isPolite, flushCandidates, sendSignal]);
 
   const handleAnswer = useCallback(async (peerUid, answer) => {
     const pc = peerConnections.current[peerUid];
-    if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
-  }, []);
+    if (!pc) return;
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      await flushCandidates(peerUid, pc);
+    } catch (err) {
+      console.error('[WarRoom] Failed to apply answer', err);
+    }
+  }, [flushCandidates]);
 
   const handleNewICECandidate = useCallback(async (peerUid, candidate) => {
     const pc = peerConnections.current[peerUid];
-    if (pc) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    // Queue until a remote description exists — addIceCandidate rejects
+    // otherwise and that candidate is lost for good.
+    if (!pc || !pc.remoteDescription) {
+      (pendingCandidates.current[peerUid] ||= []).push(candidate);
+      return;
+    }
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (err) {
+      console.warn('[WarRoom] Failed to add ICE candidate', err);
+    }
   }, []);
 
   const removePeerConnection = useCallback((peerUid) => {
     const pc = peerConnections.current[peerUid];
-    if (pc) { pc.close(); delete peerConnections.current[peerUid]; }
+    if (pc) {
+      pc.onicecandidate = null;
+      pc.ontrack = null;
+      pc.onnegotiationneeded = null;
+      pc.onconnectionstatechange = null;
+      pc.close();
+      delete peerConnections.current[peerUid];
+    }
+    delete pendingCandidates.current[peerUid];
+    delete makingOffer.current[peerUid];
     setRemoteStreams(prev => { const u = { ...prev }; delete u[peerUid]; return u; });
   }, []);
 
@@ -128,34 +245,29 @@ export function WarRoomProvider({ children }) {
     Object.keys(peerConnections.current).forEach(removePeerConnection);
   }, [removePeerConnection]);
 
-  // ── Connect to a war room ──
-  const connectToRoom = useCallback((projectId, user, project) => {
-    // If already connected to same room, skip
-    if (activeProjectId === projectId && socketRef.current?.readyState === WebSocket.OPEN) return;
-    // Disconnect from old room first (but keep call alive if same project)
-    if (socketRef.current && activeProjectId !== projectId) {
-      leaveHuddle();
-      socketRef.current.close();
-    }
-
-    userRef.current = user;
-    projectRef.current = project;
-    setActiveProjectId(projectId);
-
-    // Restore persisted chat
-    const saved = localStorage.getItem(`warroom_msgs_${projectId}`);
-    setMessages(saved ? JSON.parse(saved) : []);
-    setSharedNotes(localStorage.getItem(`warroom_notes_${projectId}`) || '');
-
-    initSpeechRecognition(user);
-
+  // ── Socket lifecycle ──
+  const openSocket = useCallback((projectId) => {
+    // https -> wss, http -> ws (the trailing "s" survives the replace).
     const wsBase = API_URL.replace(/^http/, 'ws');
     const socket = new WebSocket(`${wsBase}/ws/chat/${projectId}`);
     socketRef.current = socket;
 
-    socket.onopen = () => setIsConnected(true);
+    socket.onopen = () => {
+      setIsConnected(true);
+      reconnectAttemptsRef.current = 0;
+      // After a reconnect mid-call we must re-announce, otherwise peers who
+      // joined while we were offline never learn we are in the room.
+      if (localStreamRef.current) {
+        socket.send(JSON.stringify({ type: 'webrtc_join', sender: userRef.current?.uid }));
+      }
+    };
+
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+      let data;
+      try { data = JSON.parse(event.data); } catch { return; }
+
+      const myUid = userRef.current?.uid;
+
       if (!data.type || data.type === 'chat') { setMessages(prev => [...prev, data]); return; }
       if (data.type === 'mom_control') {
         setIsMOMEnabled(data.enabled);
@@ -165,24 +277,85 @@ export function WarRoomProvider({ children }) {
         return;
       }
       if (data.type === 'transcript') { sessionTranscripts.current.push(`${data.user}: ${data.text}`); return; }
-      if (data.type === 'editor_sync' && data.sender !== user.uid) { setSharedNotes(data.payload); return; }
+      if (data.type === 'editor_sync' && data.sender !== myUid) { setSharedNotes(data.payload); return; }
 
       const { type, sender, target, payload } = data;
-      if (target && target !== user.uid) return;
-      if (sender === user.uid) return;
-      if (type === 'webrtc_join') { if (localStreamRef.current) createPeerConnection(sender, true); }
+      if (target && target !== myUid) return;
+      if (sender === myUid) return;
+      if (type === 'webrtc_join') { if (localStreamRef.current) createPeerConnection(sender); }
       else if (type === 'webrtc_offer') { if (localStreamRef.current) handleOffer(sender, payload); }
       else if (type === 'webrtc_answer') { handleAnswer(sender, payload); }
       else if (type === 'webrtc_ice') { handleNewICECandidate(sender, payload); }
       else if (type === 'webrtc_leave') { removePeerConnection(sender); }
     };
-    socket.onclose = () => { setIsConnected(false); };
-  }, [activeProjectId, leaveHuddle, initSpeechRecognition, createPeerConnection, handleOffer, handleAnswer, handleNewICECandidate, removePeerConnection]);
+
+    socket.onclose = () => {
+      setIsConnected(false);
+      if (intentionalCloseRef.current) return;
+      // A stale socket from a room we already left must not resurrect itself.
+      if (activeProjectIdRef.current !== projectId) return;
+      // Render's free tier drops idle sockets. Without reconnecting, the room
+      // goes quietly dead — chat and signalling both stop with no visible error.
+      const attempt = (reconnectAttemptsRef.current += 1);
+      const delay = Math.min(30000, 1000 * 2 ** (attempt - 1));
+      reconnectTimerRef.current = setTimeout(() => openSocket(projectId), delay);
+    };
+  }, [createPeerConnection, handleOffer, handleAnswer, handleNewICECandidate, removePeerConnection]);
+
+  // ── Connect to a war room ──
+  // Every dependency here is stable and room identity is read from a ref, so
+  // this callback never changes identity. That matters: WarRoomChat calls it
+  // from an effect that lists it as a dependency, and the previous version
+  // changed identity as soon as it set activeProjectId — re-running the effect
+  // while the socket was still CONNECTING, failing the readyState check, and
+  // opening a second socket while orphaning the first.
+  const connectToRoom = useCallback((projectId, user, project) => {
+    userRef.current = user;
+    projectRef.current = project;
+
+    const alreadyHere =
+      activeProjectIdRef.current === projectId &&
+      (socketRef.current?.readyState === WebSocket.OPEN ||
+       socketRef.current?.readyState === WebSocket.CONNECTING);
+    if (alreadyHere) return;
+
+    const switchingRooms =
+      activeProjectIdRef.current && activeProjectIdRef.current !== projectId;
+    if (switchingRooms) leaveHuddle();
+
+    clearTimeout(reconnectTimerRef.current);
+    if (socketRef.current) {
+      intentionalCloseRef.current = true;
+      socketRef.current.onclose = null;
+      socketRef.current.close();
+      socketRef.current = null;
+      intentionalCloseRef.current = false;
+    }
+
+    activeProjectIdRef.current = projectId;
+    reconnectAttemptsRef.current = 0;
+    setActiveProjectId(projectId);
+
+    // Restore persisted chat
+    const saved = localStorage.getItem(`warroom_msgs_${projectId}`);
+    setMessages(saved ? JSON.parse(saved) : []);
+    setSharedNotes(localStorage.getItem(`warroom_notes_${projectId}`) || '');
+
+    initSpeechRecognition(user);
+    openSocket(projectId);
+  }, [leaveHuddle, initSpeechRecognition, openSocket]);
 
   // ── Disconnect from room ──
   const disconnectFromRoom = useCallback(() => {
     leaveHuddle();
-    if (socketRef.current) socketRef.current.close();
+    clearTimeout(reconnectTimerRef.current);
+    // Clear the room ref first so a close event in flight cannot schedule a
+    // reconnect to the room we are deliberately leaving.
+    activeProjectIdRef.current = null;
+    if (socketRef.current) {
+      socketRef.current.onclose = null;
+      socketRef.current.close();
+    }
     socketRef.current = null;
     setActiveProjectId(null);
     setIsConnected(false);
@@ -190,6 +363,16 @@ export function WarRoomProvider({ children }) {
     setSharedNotes('');
     if (recognitionRef.current) recognitionRef.current.stop();
   }, [leaveHuddle]);
+
+  // Tear down the socket and any pending reconnect when the provider unmounts.
+  useEffect(() => () => {
+    clearTimeout(reconnectTimerRef.current);
+    activeProjectIdRef.current = null;
+    if (socketRef.current) {
+      socketRef.current.onclose = null;
+      socketRef.current.close();
+    }
+  }, []);
 
   // ── Start huddle ──
   const startHuddle = useCallback(async () => {
