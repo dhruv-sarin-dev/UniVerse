@@ -21,11 +21,13 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
-        name: 'Uni-Verse | Team Collaboration Hub',
+        name: 'Uni-Verse | Build the team before you build the project',
         short_name: 'Uni-Verse',
-        description: 'Real-time collaborative hub for students to form winning hackathon teams.',
-        theme_color: '#0d1117',
-        background_color: '#0d1117',
+        description: 'Find teammates across every department, check they fit the work, and build somewhere that records who did what.',
+        // Matches the Field Manual stock, so the install splash and browser
+        // chrome do not flash the old dark theme before the app paints.
+        theme_color: '#E6E7E1',
+        background_color: '#E6E7E1',
         display: 'standalone',
         icons: [
           {
