@@ -1,238 +1,512 @@
-import { useEffect, useRef, useState } from 'react';
-import { motion, useInView, useAnimation, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import { motion, useMotionValue, useTransform, animate, useScroll, useSpring } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Code, Users, Zap, Layout, Terminal, Blocks, ChevronRight } from 'lucide-react';
-import GlowCard from '../components/GlowCard';
-import MagneticButton from '../components/MagneticButton';
-import ScrollDots from '../components/ScrollDots';
+import { ArrowRight } from 'lucide-react';
 
-// --- Reusable Reveal Component ---
-function RevealSection({ children, id, className = '', delay = 0 }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-10%" });
-  const controls = useAnimation();
+/**
+ * Landing — "Field Manual".
+ *
+ * The product's own vocabulary is technical documentation: projects declare
+ * required skills, applicants are vetted against a spec, commits are parsed
+ * into syntax trees and scored. So the page is the manual for that process
+ * rather than a generic product splash — drafting stock, a visible grid,
+ * monospace annotation, figures that measure what they describe.
+ *
+ * Motion follows the same idea. Nothing floats or drifts; the page is
+ * *drawn*. Rules extend from their origin, display type prints in behind a
+ * mask, the parse tree types out, and the score counts up. One orchestrated
+ * load sequence rather than effects scattered per element.
+ *
+ * Every scroll reveal uses whileInView with an explicit viewport, never a
+ * bare observer hook — content must never be invisible because an observer
+ * failed to fire. Reduced motion is honoured globally via .fm-scope.
+ */
 
-  useEffect(() => {
-    if (isInView) {
-      controls.start("visible");
-    }
-  }, [isInView, controls]);
+const SECTIONS = [
+  {
+    no: '01',
+    title: 'Discovery',
+    lede: 'Browse what is already being built.',
+    body: 'Every open project lists the skills it still needs and who is already on board. Filter by field, or search the whole catalogue.',
+    spec: [
+      ['Listed', 'Title, brief, category'],
+      ['Declared', 'Required skills, open seats'],
+      ['Visible', 'Members, pending requests'],
+    ],
+  },
+  {
+    no: '02',
+    title: 'Vetting',
+    lede: 'Prove the fit before you join.',
+    body: 'The gap between a project’s stack and your profile is read, then three questions are written for that exact pair. The lead sees a compatibility score instead of a cover letter.',
+    spec: [
+      ['Input', 'Stack, phase, open problems'],
+      ['Output', '3 questions · technical, workflow, priority'],
+      ['Scored', 'Tech fit, culture fit, ramp-up'],
+    ],
+  },
+  {
+    no: '03',
+    title: 'War Room',
+    lede: 'One room for the whole build.',
+    body: 'Video, shared notes and the team’s repository in a single view. Talk a problem through and the minutes get written for you.',
+    spec: [
+      ['Live', 'Group video, screen share'],
+      ['Shared', 'Notes sync as you type'],
+      ['Linked', 'Commits, open pull requests'],
+    ],
+  },
+  {
+    no: '04',
+    title: 'Proof of work',
+    lede: 'Contribution you cannot fake.',
+    body: 'Commits are parsed into a syntax tree and scored on the functions, classes and branches they actually add. Volume does not count. Structure does.',
+    spec: [
+      ['Parsed', 'tree-sitter, per commit diff'],
+      ['Weighted', 'class 20 · function 10 · branch 5'],
+      ['Filtered', 'Low-density diffs penalised'],
+    ],
+  },
+];
 
+const EASE = [0.16, 1, 0.3, 1];
+
+const REVEAL = {
+  initial: { opacity: 0, y: 20 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, amount: 0.15 },
+  transition: { duration: 0.5, ease: EASE },
+};
+
+function Label({ children, className = '' }) {
+  return <span className={`fm-label text-graphite ${className}`}>{children}</span>;
+}
+
+/** A rule that draws itself from its origin, like a plotter pass. */
+function DrawRule({ delay = 0, className = '', inView = false }) {
+  const anim = inView
+    ? { whileInView: { scaleX: 1 }, viewport: { once: true, amount: 0.4 } }
+    : { animate: { scaleX: 1 } };
   return (
-    <motion.section
-      id={id}
-      ref={ref}
-      variants={{
-        hidden: { opacity: 0, y: 50, filter: "blur(10px)" },
-        visible: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.8, delay, ease: [0.16, 1, 0.3, 1] } }
-      }}
-      initial="hidden"
-      animate={controls}
-      className={`relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 ${className}`}
-    >
-      {children}
-    </motion.section>
+    <motion.div
+      initial={{ scaleX: 0 }}
+      {...anim}
+      transition={{ duration: 0.7, delay, ease: EASE }}
+      className={`h-px origin-left bg-ink ${className}`}
+      aria-hidden="true"
+    />
   );
 }
 
-// --- Kinetic Typography Word Matrix ---
-const HERO_WORDS = ['Hack', 'Connect', 'Ideate'];
-
-export default function Landing() {
-  const navigate = useNavigate();
-
+/** Display type printing in from behind a mask. */
+function PrintLine({ children, delay = 0, className = '' }) {
   return (
-    <div className="relative w-full min-h-screen bg-transparent overflow-hidden">
-      <ScrollDots sections={['hero', 'bento', 'features', 'stats', 'cta']} />
+    <span className="block overflow-hidden">
+      <motion.span
+        initial={{ y: '108%' }}
+        animate={{ y: '0%' }}
+        transition={{ duration: 0.75, delay, ease: EASE }}
+        className={`block ${className}`}
+      >
+        {children}
+      </motion.span>
+    </span>
+  );
+}
 
-      {/* --- HERO SECTION --- */}
-      <section id="hero" className="relative min-h-[100vh] flex flex-col items-center justify-center text-center px-4 pt-32 pb-20 z-10">
+/** Counts up to a value once, when scrolled into view. */
+function CountUp({ to, delay = 0, className = '' }) {
+  const count = useMotionValue(0);
+  const rounded = useTransform(count, (v) => Math.round(v));
+  const [display, setDisplay] = useState(0);
 
+  useEffect(() => {
+    const unsub = rounded.on('change', setDisplay);
+    const controls = animate(count, to, { duration: 1.1, delay, ease: 'easeOut' });
+    return () => { controls.stop(); unsub(); };
+  }, [count, rounded, to, delay]);
 
-        <h1 className="heading-hero font-outfit mb-6 text-white perspective-[1000px] flex flex-col items-center justify-center gap-1 md:gap-2 leading-tight">
-          <span>A Platform For Students To</span>
-          <span className="relative flex justify-center items-center min-w-[300px] h-[1.3em]">
-            <AnimateWords words={HERO_WORDS} />
-          </span>
-          <span>And Build Projects</span>
-        </h1>
+  return <span className={className}>{display}</span>;
+}
 
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
-          className="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed"
-        >
-          A hackathon project helping students connect across different universities. Find your perfect team, share brilliant ideas, and build the next big thing together.
-        </motion.p>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.6 }}
-          className="flex flex-col sm:flex-row gap-6 items-center"
-        >
-          <MagneticButton as="div">
-            <button 
-              onClick={() => navigate('/onboarding')}
-              className="cursor-expand group relative px-8 py-4 bg-white text-black font-semibold rounded-full text-lg w-full sm:w-auto overflow-hidden btn-linear"
-            >
-              <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/50 to-transparent -translate-x-full group-hover:animate-shimmer" />
-              <span className="relative flex items-center gap-2">
-                Start Building <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </span>
-            </button>
-          </MagneticButton>
-          <MagneticButton as="div">
-             <button 
-                onClick={() => document.getElementById('bento').scrollIntoView({ behavior: 'smooth' })}
-                className="cursor-expand px-8 py-4 glass border border-white/20 text-white font-medium rounded-full hover:bg-white/5 transition-colors text-lg w-full sm:w-auto btn-linear text-shadow-glow"
-             >
-               Explore Features
-             </button>
-          </MagneticButton>
-        </motion.div>
-      </section>
-
-      {/* --- BENTO GRID FEATURE SET --- */}
-      <RevealSection id="bento" className="pt-20">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-outfit font-bold mb-4 text-white">Our Core <span className="text-neon-teal">Features</span>.</h2>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">Built for students to collaborate during hackathons and beyond.</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-[320px]">
-           {/* Big left card */}
-           <GlowCard className="md:col-span-2 md:row-span-2 bento-card p-10 flex flex-col justify-between" colorClass="rgba(0, 240, 255, 0.1)">
-             <div>
-                <div className="w-14 h-14 rounded-2xl bg-neon-blue/10 flex items-center justify-center mb-6">
-                  <Users className="text-neon-blue" size={28} />
-                </div>
-                <h3 className="text-3xl font-bold text-white mb-4">Algorithmic Matchmaking</h3>
-                <p className="text-slate-400 text-lg max-w-md">Our AI analyzes your skills, GitHub history, and project goals to instantly match you with the exact co-founders you need—across any department.</p>
-             </div>
-             <div className="w-full h-48 mt-8 border border-white/10 rounded-xl bg-black/40 relative overflow-hidden flex items-center justify-center group">
-               <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMC41IiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48L3N2Zz4=')] opacity-30"></div>
-               <div className="flex gap-4 items-center relative z-10 transition-transform group-hover:scale-105 duration-500">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-neon-blue to-neon-purple p-[2px] animate-float"><div className="w-full h-full bg-black rounded-full flex items-center justify-center"><Code /></div></div>
-                  <div className="h-1 w-12 bg-white/20 rounded-full" />
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-neon-teal to-neon-blue p-[2px] animate-float" style={{ animationDelay: '1s'}}><div className="w-full h-full bg-black rounded-full flex items-center justify-center"><Zap size={32} /></div></div>
-                  <div className="h-1 w-12 bg-white/20 rounded-full" />
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-neon-magenta to-neon-purple p-[2px] animate-float" style={{ animationDelay: '2s'}}><div className="w-full h-full bg-black rounded-full flex items-center justify-center"><Layout /></div></div>
-               </div>
-             </div>
-           </GlowCard>
-
-           {/* Top right card */}
-           <GlowCard className="bento-card p-8 flex flex-col" colorClass="rgba(112, 0, 255, 0.1)">
-              <div className="w-12 h-12 rounded-xl bg-neon-purple/10 flex items-center justify-center mb-6">
-                <Terminal className="text-neon-purple" size={24} />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-3">Persistent War Rooms</h3>
-              <p className="text-slate-400 mb-6 text-sm flex-grow">Dedicated virtual workspaces for your team. Integrated task boards, chat, and architecture diagrams all in one place.</p>
-
-           </GlowCard>
-
-           {/* Bottom right card */}
-           <GlowCard className="bento-card p-8 flex flex-col" colorClass="rgba(0, 240, 160, 0.1)">
-              <div className="w-12 h-12 rounded-xl bg-neon-teal/10 flex items-center justify-center mb-6">
-                <Blocks className="text-neon-teal" size={24} />
-              </div>
-              <h3 className="text-xl font-bold text-white mb-3">GitHub Integration</h3>
-              <p className="text-slate-400 mb-6 text-sm flex-grow">Connect your repos to automatically display tech stacks and prove your engineering chops through verified commits.</p>
-
-           </GlowCard>
-        </div>
-      </RevealSection>
-
-      {/* --- FEATURE DEEP DIVES --- */}
-      <RevealSection id="features" className="pt-20">
-        <div className="flex flex-col md:flex-row gap-16 items-center">
-           <div className="flex-1 w-full relative">
-              <div className="absolute inset-0 bg-neon-blue/20 blur-[100px] rounded-full" />
-              <div className="relative glass border border-white/10 rounded-2xl p-4 overflow-hidden">
-                <div className="w-full h-8 flex items-center gap-2 border-b border-white/10 pb-4 mb-4">
-                  <div className="w-3 h-3 rounded-full bg-red-400/80" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-400/80" />
-                  <div className="w-3 h-3 rounded-full bg-green-400/80" />
-                </div>
-                <div className="space-y-3 font-mono text-xs md:text-sm text-slate-300">
-                  <p><span className="text-neon-purple">import</span> {'{'} Team {'}'} <span className="text-neon-purple">from</span> <span className="text-neon-teal">'@universe/core'</span>;</p>
-                  <br/>
-                  <p><span className="text-neon-blue">const</span> project = <span className="text-neon-purple">new</span> Project({'{\n'}  name: <span className="text-neon-teal">'Apollo'</span>,\n  stack: [<span className="text-neon-teal">'React'</span>, <span className="text-neon-teal">'Python'</span>],\n  seeking: [<span className="text-neon-teal">'UI/UX'</span>]\n{'}'});</p>
-                  <br/>
-                  <p><span className="text-neon-blue">await</span> Team.match(project);</p>
-                  <p className="text-green-400 animate-pulse mt-4">&gt;&gt; Match found! 98% compatible designer located.</p>
-                </div>
-              </div>
-           </div>
-           <div className="flex-1">
-             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass border border-white/10 mb-6 text-xs text-neon-blue">
-               Developer First
-             </div>
-             <h2 className="text-3xl md:text-4xl font-outfit font-bold text-white mb-6">Designed for Builders, <br/>by Builders.</h2>
-             <p className="text-slate-400 text-lg leading-relaxed mb-8">
-               We stripped away the fluff. No corporate jargon, no endless scrolling feeds of self-promotion. Just hardcore builders connecting over shared tech stacks and ambitious goals. Show your actual code, build your reputation, and ship products.
-             </p>
-             <ul className="space-y-4 text-slate-300">
-                <li className="flex items-center gap-3"><Zap className="text-neon-teal" size={20} /> Instant technical vetting</li>
-                <li className="flex items-center gap-3"><Zap className="text-neon-teal" size={20} /> Seamless codebase bridging</li>
-                <li className="flex items-center gap-3"><Zap className="text-neon-teal" size={20} /> Real-time peer code review matching</li>
-             </ul>
-           </div>
-        </div>
-      </RevealSection>
-
-      {/* --- CTA SECTION --- */}
-      <RevealSection id="cta" className="pb-32">
-        <GlowCard className="w-full p-12 md:p-24 text-center rounded-[3rem] bento-card relative overflow-hidden" colorClass="rgba(112, 0, 255, 0.2)">
-           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-neon-purple/20 blur-[120px] rounded-full pointer-events-none" />
-           <h2 className="text-4xl md:text-6xl font-outfit font-bold text-white mb-8 relative z-10">Stop ideating. <br/>Start <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-blue to-neon-teal">shipping.</span></h2>
-           <p className="text-xl text-slate-400 max-w-2xl mx-auto mb-12 relative z-10">
-             Join the fastest growing network of student builders. Find your co-founder today and launch your next big idea by tomorrow.
-           </p>
-           <MagneticButton as="div">
-             <button 
-                onClick={() => navigate('/onboarding')}
-                className="cursor-expand relative z-10 px-10 py-5 bg-white text-black font-bold rounded-full text-xl hover:scale-105 transition-transform duration-300 btn-linear shadow-[0_0_40px_rgba(255,255,255,0.3)]"
-             >
-               Launch Idea
-             </button>
-           </MagneticButton>
-        </GlowCard>
-      </RevealSection>
-      
-      {/* Footer */}
-      <footer className="border-t border-white/5 bg-black/50 py-12 text-center text-slate-500 relative z-10">
-        <p>© 2026 Uni-Verse. </p>
-      </footer>
+function DimensionLine({ label, delay = 0 }) {
+  return (
+    <div className="flex items-center gap-2" aria-hidden="true">
+      <span className="h-2.5 w-px bg-ink/40" />
+      <motion.span
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: 1 }}
+        transition={{ duration: 0.6, delay, ease: EASE }}
+        className="h-px flex-1 origin-right bg-ink/25"
+      />
+      <motion.span
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3, delay: delay + 0.5 }}
+      >
+        <Label className="whitespace-nowrap !text-[10px]">{label}</Label>
+      </motion.span>
+      <motion.span
+        initial={{ scaleX: 0 }}
+        animate={{ scaleX: 1 }}
+        transition={{ duration: 0.6, delay, ease: EASE }}
+        className="h-px flex-1 origin-left bg-ink/25"
+      />
+      <span className="h-2.5 w-px bg-ink/40" />
     </div>
   );
 }
 
-// Helper component for the kinetic typography word rotation
-function AnimateWords({ words }) {
-  const [index, setIndex] = useState(0);
+function Figure({ no, title, meta, children }) {
+  return (
+    <figure className="border border-ink/25 bg-paper-raised">
+      <figcaption className="flex items-baseline justify-between gap-3 border-b border-ink/20 px-3 py-2">
+        <Label className="!text-ink">Fig. {no} — {title}</Label>
+        <Label className="whitespace-nowrap !text-[10px]">{meta}</Label>
+      </figcaption>
+      {children}
+    </figure>
+  );
+}
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setIndex((prev) => (prev + 1) % words.length);
-    }, 2500); // 2.5s per word
-    return () => clearInterval(timer);
-  }, [words.length]);
+/** Fig. 1 — a team drawn as a spec. The open seat is the only unresolved
+ *  value on the sheet, so it is the only thing using signal, and the only
+ *  thing still moving once the page settles. */
+function TeamFigure() {
+  const seats = [
+    { role: 'Backend', detail: 'python · fastapi', filled: true },
+    { role: 'Frontend', detail: 'react · css', filled: true },
+    { role: 'Design', detail: 'figma · research', filled: true },
+    { role: 'Open seat', detail: 'ml · data', filled: false },
+  ];
 
   return (
-    <AnimatePresence mode="wait">
-      <motion.span
-        key={index}
-        initial={{ opacity: 0, filter: 'blur(8px)', x: "-50%", y: "calc(-50% + 15px)" }}
-        animate={{ opacity: 1, y: "-50%", filter: 'blur(0px)', x: "-50%" }}
-        exit={{ opacity: 0, y: "calc(-50% - 15px)", filter: 'blur(8px)', x: "-50%" }}
-        transition={{ duration: 0.3, ease: "easeOut" }}
-        className="absolute top-1/2 left-1/2 whitespace-nowrap transform-gpu text-transparent bg-clip-text bg-gradient-to-r from-neon-blue via-neon-purple to-neon-magenta animate-gradient p-2"
-      >
-        {words[index]}
-      </motion.span>
-    </AnimatePresence>
+    <Figure no="1" title="Team composition" meta="4 seats · 1 open">
+      <div className="fm-grid p-3">
+        <div className="grid grid-cols-4 gap-2">
+          {seats.map((seat, i) => (
+            <motion.div
+              key={seat.role}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55 + i * 0.09, duration: 0.4, ease: EASE }}
+              className={`relative p-2 ${seat.filled ? 'border border-ink/20 bg-paper' : 'bg-signal/[0.07]'}`}
+            >
+              {!seat.filled && (
+                <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
+                  <rect
+                    x="0.5" y="0.5" width="99%" height="99%"
+                    fill="none" stroke="var(--color-signal)" strokeWidth="1"
+                    strokeDasharray="6 4" className="fm-march"
+                  />
+                </svg>
+              )}
+              <div
+                className={`mb-4 h-6 w-6 rounded-full border ${
+                  seat.filled ? 'border-ink/30 bg-ink/10' : 'border-dashed border-signal'
+                }`}
+              />
+              <p className={`fm-condensed text-[13px] font-bold leading-none ${seat.filled ? 'text-ink' : 'text-signal'}`}>
+                {seat.role}
+              </p>
+              <p className="fm-label mt-1 !text-[9px] !tracking-normal text-graphite">{seat.detail}</p>
+            </motion.div>
+          ))}
+        </div>
+        <div className="mt-3">
+          <DimensionLine label="one team · four disciplines" delay={1.0} />
+        </div>
+      </div>
+    </Figure>
+  );
+}
+
+/**
+ * Fig. 2 — the parse tree, typed out line by line. This is the most
+ * distinctive artifact the product owns: a commit turned into structure and
+ * scored on it. Showing the real weights makes section 04's claim checkable.
+ */
+function ParseFigure() {
+  const nodes = [
+    { depth: 0, text: 'class Matcher:', kind: 'class', pts: 20 },
+    { depth: 1, text: 'def score(self, a, b):', kind: 'function', pts: 10 },
+    { depth: 2, text: 'if overlap(a, b):', kind: 'branch', pts: 5 },
+    { depth: 3, text: 'return weight * 1.5', kind: null, pts: 0 },
+  ];
+  const kindColor = { class: 'text-blueprint', function: 'text-ink', branch: 'text-graphite' };
+  const START = 0.95;
+  const STEP = 0.16;
+
+  return (
+    <Figure no="2" title="Commit, parsed" meta="tree-sitter">
+      <div className="p-3">
+        <div className="space-y-1 font-mono text-[11px] leading-relaxed">
+          {nodes.map((n, i) => (
+            <motion.div
+              key={n.text}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: START + i * STEP, duration: 0.01 }}
+              className="flex items-baseline gap-2"
+              style={{ paddingLeft: `${n.depth * 14}px` }}
+            >
+              <span className="select-none text-ink/30">{n.depth === 0 ? '▸' : '└'}</span>
+              <motion.span
+                initial={{ clipPath: 'inset(0 100% 0 0)' }}
+                animate={{ clipPath: 'inset(0 0% 0 0)' }}
+                transition={{ delay: START + i * STEP, duration: 0.3, ease: 'linear' }}
+                className={`flex-1 truncate ${n.kind ? kindColor[n.kind] : 'text-graphite'}`}
+              >
+                {n.text}
+              </motion.span>
+              {n.pts > 0 && (
+                <motion.span
+                  initial={{ opacity: 0, x: -4 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: START + i * STEP + 0.32, duration: 0.25 }}
+                  className="fm-label shrink-0 !text-[9px] !tracking-wider text-signal"
+                >
+                  +{n.pts}
+                </motion.span>
+              )}
+            </motion.div>
+          ))}
+          <motion.span
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: START + nodes.length * STEP }}
+            className="fm-caret inline-block h-3 w-1.5 translate-y-0.5 bg-ink/60"
+            aria-hidden="true"
+          />
+        </div>
+
+        <div className="mt-3 flex items-center justify-between border-t border-ink/15 pt-2">
+          <Label className="!text-[9px]">1 class · 1 function · 1 branch</Label>
+          <span className="fm-condensed text-xl font-black leading-none text-ink">
+            +<CountUp to={35} delay={START + nodes.length * STEP} />
+          </span>
+        </div>
+      </div>
+    </Figure>
+  );
+}
+
+function SpecSection({ section, index }) {
+  return (
+    <section className="py-12 sm:py-16">
+      <DrawRule inView className="mb-8 !bg-rule" />
+
+      <motion.div {...REVEAL} className="mb-8 flex items-baseline justify-between">
+        <Label className="!text-[10px]">§ {section.no} / {String(SECTIONS.length).padStart(2, '0')}</Label>
+        <Label className="!text-[10px]">Uni-Verse — Field Manual</Label>
+      </motion.div>
+
+      <div className="grid gap-8 md:grid-cols-12">
+        <motion.div
+          initial={{ opacity: 0, x: -12 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          viewport={{ once: true, amount: 0.4 }}
+          transition={{ duration: 0.5, ease: EASE }}
+          className="md:col-span-1"
+        >
+          <span className="fm-condensed block text-5xl font-black leading-none text-ink/15 sm:text-6xl">
+            {section.no}
+          </span>
+        </motion.div>
+
+        <motion.div {...REVEAL} transition={{ ...REVEAL.transition, delay: 0.05 }} className="md:col-span-5">
+          <h2 className="fm-condensed text-3xl font-black uppercase leading-[0.92] tracking-tight text-ink sm:text-4xl">
+            {section.title}
+          </h2>
+          <p className="mt-3 text-lg font-medium leading-snug text-ink sm:text-xl">{section.lede}</p>
+          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-graphite">{section.body}</p>
+        </motion.div>
+
+        <div className="md:col-span-6">
+          <dl className="border-t border-ink/20">
+            {section.spec.map(([term, value], i) => (
+              <motion.div
+                key={term}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.45, delay: 0.1 + i * 0.08, ease: EASE }}
+                className="flex flex-col gap-1 border-b border-rule py-3 sm:flex-row sm:items-baseline sm:gap-6"
+              >
+                <dt className="w-24 shrink-0"><Label>{term}</Label></dt>
+                <dd className="font-mono text-[13px] leading-snug text-ink">{value}</dd>
+              </motion.div>
+            ))}
+          </dl>
+          <p className="mt-2 text-right">
+            <Label className="!text-[10px]">Sheet {index + 1} of {SECTIONS.length}</Label>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export default function Landing() {
+  const navigate = useNavigate();
+  const { scrollYProgress } = useScroll();
+  // Spring so the ruler tracks the scroll rather than snapping to it.
+  const progress = useSpring(scrollYProgress, { stiffness: 120, damping: 30, mass: 0.4 });
+
+  return (
+    <div className="fm-scope fm-paper relative min-h-screen font-sans text-ink">
+      {/* Reading position, drawn as a ruler along the sheet edge. */}
+      <motion.div
+        style={{ scaleX: progress }}
+        className="fixed left-0 top-0 z-40 h-[3px] w-full origin-left bg-signal"
+        aria-hidden="true"
+      />
+
+      <div className="fm-crop relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        {/* ── Cover ─────────────────────────────────────────────────── */}
+        <header className="pt-24 pb-10 sm:pt-32 sm:pb-14">
+          <div className="flex items-baseline justify-between pb-2">
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+              <Label className="!text-ink">Uni-Verse — Field Manual</Label>
+            </motion.span>
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, delay: 0.1 }}>
+              <Label>Rev 02 · 2026</Label>
+            </motion.span>
+          </div>
+          <DrawRule />
+
+          <div className="grid gap-10 pt-8 md:grid-cols-12 md:gap-8">
+            <div className="md:col-span-7">
+              <h1 className="fm-condensed text-[14vw] font-black uppercase leading-[0.82] tracking-[-0.03em] text-ink sm:text-[9.5vw] lg:text-[104px]">
+                <PrintLine delay={0.15}>Build the team</PrintLine>
+                <PrintLine delay={0.26}>before you build</PrintLine>
+                <PrintLine delay={0.37} className="text-blueprint">the project.</PrintLine>
+              </h1>
+
+              <motion.p
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.62, duration: 0.5 }}
+                className="mt-6 max-w-md text-lg leading-relaxed text-graphite"
+              >
+                Find students across every department, check they actually fit the
+                work, then build somewhere that records who did what.
+              </motion.p>
+
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.72, duration: 0.5 }}
+                className="mt-8 flex flex-col gap-3 sm:flex-row"
+              >
+                <button
+                  onClick={() => navigate('/onboarding')}
+                  className="group relative inline-flex items-center justify-center gap-2 overflow-hidden bg-ink px-7 py-4 text-sm font-semibold uppercase tracking-wider text-paper"
+                >
+                  <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+                  <span className="relative">Start building</span>
+                  <ArrowRight size={16} className="relative transition-transform group-hover:translate-x-1" />
+                </button>
+                <button
+                  onClick={() => navigate('/discover')}
+                  className="group relative inline-flex items-center justify-center overflow-hidden border border-ink px-7 py-4 text-sm font-semibold uppercase tracking-wider text-ink transition-colors hover:text-paper"
+                >
+                  <span className="absolute inset-0 origin-bottom scale-y-0 bg-ink transition-transform duration-300 ease-out group-hover:scale-y-100" />
+                  <span className="relative">Browse projects</span>
+                </button>
+              </motion.div>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.45, duration: 0.55, ease: EASE }}
+              className="flex flex-col gap-4 md:col-span-5"
+            >
+              <TeamFigure />
+              <ParseFigure />
+            </motion.div>
+          </div>
+        </header>
+
+        {/* ── Contents ──────────────────────────────────────────────── */}
+        <nav aria-label="Contents" className="pt-4 pb-2">
+          <DrawRule inView />
+          <div className="mt-4">
+            <Label className="!text-[10px]">Contents</Label>
+          </div>
+          <ul className="mt-3">
+            {SECTIONS.map((s, i) => (
+              <motion.li
+                key={s.no}
+                initial={{ opacity: 0, y: 8 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.5 }}
+                transition={{ duration: 0.4, delay: i * 0.07, ease: EASE }}
+                className="border-b border-rule last:border-b-0"
+              >
+                <a
+                  href={`#section-${s.no}`}
+                  className="group flex items-baseline gap-4 py-2.5 transition-colors hover:text-blueprint"
+                >
+                  <Label className="w-8 shrink-0 transition-colors group-hover:!text-blueprint">{s.no}</Label>
+                  <span className="fm-condensed text-lg font-bold uppercase tracking-tight transition-transform duration-300 group-hover:translate-x-1">
+                    {s.title}
+                  </span>
+                  <span className="relative mx-2 h-px flex-1 self-center bg-rule" aria-hidden="true">
+                    <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-500 ease-out group-hover:scale-x-100" />
+                  </span>
+                  <Label className="shrink-0 !text-[10px] transition-colors group-hover:!text-blueprint">
+                    Sheet {i + 1}
+                  </Label>
+                </a>
+              </motion.li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* ── Sections ──────────────────────────────────────────────── */}
+        <main>
+          {SECTIONS.map((section, i) => (
+            <div key={section.no} id={`section-${section.no}`} className="scroll-mt-24">
+              <SpecSection section={section} index={i} />
+            </div>
+          ))}
+        </main>
+
+        {/* ── Closing ───────────────────────────────────────────────── */}
+        <section className="py-16 sm:py-20">
+          <DrawRule inView />
+          <div className="grid gap-8 pt-12 md:grid-cols-12">
+            <div className="md:col-span-8">
+              <h2 className="fm-condensed text-4xl font-black uppercase leading-[0.9] text-ink sm:text-6xl">
+                <PrintLine delay={0}>Your project needs</PrintLine>
+                <PrintLine delay={0.1} className="text-blueprint">three more people.</PrintLine>
+              </h2>
+              <motion.p {...REVEAL} className="mt-4 max-w-md text-[15px] leading-relaxed text-graphite">
+                Post what you are building and what it still needs. Applicants
+                arrive with a compatibility score already attached.
+              </motion.p>
+            </div>
+            <motion.div {...REVEAL} className="flex items-end md:col-span-4">
+              <button
+                onClick={() => navigate('/onboarding')}
+                className="group relative inline-flex w-full items-center justify-between gap-2 overflow-hidden bg-signal px-6 py-5 text-sm font-semibold uppercase tracking-wider text-paper"
+              >
+                <span className="absolute inset-0 origin-left scale-x-0 bg-ink transition-transform duration-300 ease-out group-hover:scale-x-100" />
+                <span className="relative">Create your profile</span>
+                <ArrowRight size={16} className="relative transition-transform group-hover:translate-x-1" />
+              </button>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* ── Colophon ──────────────────────────────────────────────── */}
+        <footer className="flex flex-col gap-2 border-t border-rule py-8 sm:flex-row sm:items-center sm:justify-between">
+          <Label>Uni-Verse · Built for university teams</Label>
+          <Label className="!text-[10px]">© 2026 · Rev 02</Label>
+        </footer>
+      </div>
+    </div>
   );
 }
