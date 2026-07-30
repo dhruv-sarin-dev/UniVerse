@@ -9,7 +9,14 @@
  * Add routes here as each group lands. Once it covers every route, delete this
  * module and the conditionals that use it.
  */
-export const FIELD_MANUAL_ROUTES = ['/', '/discover', '/community'];
+export const FIELD_MANUAL_ROUTES = [
+  '/',
+  '/discover',
+  '/community',
+  '/profile',
+  '/onboarding',
+  '/compatibility-exam',
+];
 
 /**
  * Route families whose paths carry an id, so an exact match cannot work:

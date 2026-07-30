@@ -1,23 +1,50 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Shield,
-  Zap,
-  Users,
-  Code2,
-  Eye,
-  EyeOff,
-  Sparkles,
-  TrendingUp,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react';
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
+import { Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+
+/**
+ * The marked paper — a score sheet.
+ *
+ * The gauge and the bars are readouts on an instrument rather than dashboard
+ * chrome: a hairline track, a single measured arc, ticks you can read a value
+ * against. Only a failing score is drawn in signal, because that is the one
+ * result the lead has to act on.
+ */
+
+const EASE = [0.16, 1, 0.3, 1];
+
+/** Bands are read off the same scale the backend scores against. */
+const BANDS = [
+  { min: 75, stroke: 'var(--color-blueprint)', text: '!text-blueprint', label: 'Strong fit' },
+  { min: 50, stroke: 'var(--color-ink)', text: '!text-ink', label: 'Moderate fit' },
+  { min: 30, stroke: 'var(--color-graphite)', text: '!text-graphite', label: 'Weak fit' },
+  { min: -Infinity, stroke: 'var(--color-signal)', text: '!text-signal', label: 'Low fit' },
+];
+
+function Label({ children, className = '' }) {
+  return <span className={`fm-label text-graphite ${className}`}>{children}</span>;
+}
+
+/** Counts up to a value once. */
+function CountUp({ to, delay = 0, className = '' }) {
+  const count = useMotionValue(0);
+  const rounded = useTransform(count, (v) => Math.round(v));
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const unsub = rounded.on('change', setDisplay);
+    const controls = animate(count, to, { duration: 1.4, delay, ease: 'easeOut' });
+    return () => { controls.stop(); unsub(); };
+  }, [count, rounded, to, delay]);
+
+  return <span className={className}>{display}</span>;
+}
 
 /**
  * Circular progress ring SVG component.
  * Renders a score as a large animated gauge.
  */
-function ScoreRing({ score, size = 180, strokeWidth = 10 }) {
+function ScoreRing({ score, size = 168, strokeWidth = 8 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const [offset, setOffset] = useState(circumference);
@@ -29,85 +56,94 @@ function ScoreRing({ score, size = 180, strokeWidth = 10 }) {
     return () => clearTimeout(timer);
   }, [score, circumference]);
 
-  // Color based on score
-  const getColor = (s) => {
-    if (s >= 75) return { stroke: '#10b981', glow: 'rgba(16, 185, 129, 0.3)', label: 'Strong Fit' };
-    if (s >= 50) return { stroke: '#f59e0b', glow: 'rgba(245, 158, 11, 0.3)', label: 'Moderate Fit' };
-    if (s >= 30) return { stroke: '#f97316', glow: 'rgba(249, 115, 22, 0.3)', label: 'Weak Fit' };
-    return { stroke: '#ef4444', glow: 'rgba(239, 68, 68, 0.3)', label: 'Low Fit' };
-  };
-
-  const colorConfig = getColor(score);
+  const band = BANDS.find((b) => score >= b.min);
 
   return (
     <div className="relative inline-flex items-center justify-center">
-      <svg width={size} height={size} className="-rotate-90">
+      <svg width={size} height={size} className="-rotate-90" aria-hidden="true">
         {/* Track */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.04)"
+          stroke="var(--color-ink)"
+          strokeOpacity="0.12"
           strokeWidth={strokeWidth}
         />
-        {/* Progress */}
+        {/* Quarter ticks, so the arc can be read as a measurement */}
+        {[0, 25, 50, 75].map((t) => {
+          const angle = (t / 100) * 2 * Math.PI;
+          const inner = radius - strokeWidth / 2 - 4;
+          const outer = radius + strokeWidth / 2 + 4;
+          return (
+            <line
+              key={t}
+              x1={size / 2 + Math.cos(angle) * inner}
+              y1={size / 2 + Math.sin(angle) * inner}
+              x2={size / 2 + Math.cos(angle) * outer}
+              y2={size / 2 + Math.sin(angle) * outer}
+              stroke="var(--color-ink)"
+              strokeOpacity="0.25"
+              strokeWidth="1"
+            />
+          );
+        })}
+        {/* Measured arc */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke={colorConfig.stroke}
+          stroke={band.stroke}
           strokeWidth={strokeWidth}
-          strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          style={{
-            transition: 'stroke-dashoffset 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-            filter: `drop-shadow(0 0 12px ${colorConfig.glow})`,
-          }}
+          style={{ transition: 'stroke-dashoffset 1.5s cubic-bezier(0.16, 1, 0.3, 1)' }}
         />
       </svg>
       {/* Center content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <motion.span
-          className="text-5xl font-bold text-white tabular-nums"
-          initial={{ opacity: 0, scale: 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.5, duration: 0.6, type: 'spring' }}
-        >
-          {score}
-        </motion.span>
-        <span className="text-xs text-slate-400 mt-1 tracking-wider uppercase">{colorConfig.label}</span>
+        <span className="fm-condensed text-5xl font-black leading-none tabular-nums text-ink">
+          <CountUp to={score} delay={0.3} />
+        </span>
+        <span className="mt-2">
+          <Label className={`!text-[10px] ${band.text}`}>{band.label}</Label>
+        </span>
       </div>
     </div>
   );
 }
 
 /**
- * Animated progress bar for radar metrics.
+ * A single measured readout: value in mono, bar against a ticked track.
  */
-function MetricBar({ label, value, icon: Icon, color, delay = 0 }) {
+function MetricBar({ label, value, delay = 0 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, x: -20 }}
+      initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay, duration: 0.4 }}
-      className="space-y-2"
+      transition={{ delay, duration: 0.4, ease: EASE }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4" style={{ color }} />
-          <span className="text-sm text-slate-300">{label}</span>
-        </div>
-        <span className="text-sm font-semibold text-white tabular-nums">{value}%</span>
+      <div className="flex items-baseline justify-between gap-3">
+        <Label>{label}</Label>
+        <span className="font-mono text-[13px] tabular-nums text-ink">{value}%</span>
       </div>
-      <div className="h-2 bg-white/[0.04] rounded-full overflow-hidden">
+      <div className="relative mt-1.5 h-2 border-b border-ink/20">
+        <div className="absolute inset-x-0 bottom-0 h-1.5 bg-ink/[0.06]" />
+        {[25, 50, 75].map((t) => (
+          <span
+            key={t}
+            className="absolute bottom-0 h-1.5 w-px bg-ink/20"
+            style={{ left: `${t}%` }}
+            aria-hidden="true"
+          />
+        ))}
         <motion.div
-          className="h-full rounded-full"
-          style={{ backgroundColor: color }}
-          initial={{ width: '0%' }}
-          animate={{ width: `${value}%` }}
+          className="absolute bottom-0 left-0 h-1.5 origin-left bg-ink"
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: value / 100 }}
+          style={{ width: '100%' }}
           transition={{ delay: delay + 0.3, duration: 1, ease: 'easeOut' }}
         />
       </div>
@@ -129,115 +165,83 @@ export default function TeamLeadApplicantView({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="max-w-2xl mx-auto space-y-6"
+      transition={{ duration: 0.5, ease: EASE }}
+      className="space-y-5"
     >
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600/30 to-teal-600/30 flex items-center justify-center">
-          <Shield className="w-5 h-5 text-emerald-400" />
-        </div>
-        <div>
-          <h2 className="text-lg font-bold text-white">Compatibility Report</h2>
-          <p className="text-xs text-slate-500">
-            <span className="text-cyan-400">{applicantName}</span>
-            {' → '}
-            <span className="text-violet-400">{projectName}</span>
-          </p>
-        </div>
+      {/* ── Running head ─────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-1 border-b border-ink pb-2 sm:flex-row sm:items-baseline sm:justify-between">
+        <Label className="!text-ink">Marked — compatibility report</Label>
+        <Label className="!text-[10px]">
+          {applicantName} → {projectName}
+        </Label>
       </div>
 
-      {/* ── Score + Radar — Side by Side ─────────────────────────────────── */}
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-sm p-6">
-        <div className="flex flex-col md:flex-row items-center gap-8">
-          {/* Score Ring */}
-          <div className="flex-shrink-0">
+      {/* ── Score + measured metrics ─────────────────────────────────────── */}
+      <section className="border border-ink/20 bg-paper-raised">
+        <div className="flex items-baseline justify-between gap-3 border-b border-ink/20 px-4 py-2">
+          <Label className="!text-ink">Result — total compatibility</Label>
+          <Label className="!text-[10px]">scale 0–100</Label>
+        </div>
+        <div className="fm-grid flex flex-col items-center gap-8 p-5 sm:p-6 md:flex-row">
+          <div className="shrink-0">
             <ScoreRing score={totalCompatibilityScore} />
           </div>
 
-          {/* Radar Metrics */}
-          <div className="flex-1 w-full space-y-4">
-            <MetricBar
-              label="Technical Fit"
-              value={radarMetrics.techFit}
-              icon={Code2}
-              color="#06b6d4"
-              delay={0.1}
-            />
-            <MetricBar
-              label="Culture Fit"
-              value={radarMetrics.cultureFit}
-              icon={Users}
-              color="#8b5cf6"
-              delay={0.2}
-            />
-            <MetricBar
-              label="Speed-to-Productivity"
-              value={radarMetrics.speed}
-              icon={Zap}
-              color="#f59e0b"
-              delay={0.3}
-            />
+          <div className="w-full flex-1 space-y-4">
+            <MetricBar label="Technical fit" value={radarMetrics.techFit} delay={0.1} />
+            <MetricBar label="Culture fit" value={radarMetrics.cultureFit} delay={0.2} />
+            <MetricBar label="Speed to productivity" value={radarMetrics.speed} delay={0.3} />
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* ── AI Insight Block ────────────────────────────────────────────── */}
-      <motion.div
+      {/* ── Assessor's note ─────────────────────────────────────────────── */}
+      <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
-        className="rounded-2xl border border-violet-500/10 bg-gradient-to-br from-violet-500/[0.04] to-cyan-500/[0.04] p-5"
+        transition={{ delay: 0.6, duration: 0.4, ease: EASE }}
+        className="border border-ink/20 bg-paper-raised"
       >
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <Sparkles className="w-4 h-4 text-violet-400" />
-          </div>
-          <div>
-            <h4 className="text-xs font-medium text-violet-400 tracking-wider uppercase mb-2">
-              AI Insight
-            </h4>
-            <p className="text-sm text-slate-300 leading-relaxed">{summary}</p>
-          </div>
+        <div className="border-b border-ink/20 px-4 py-2">
+          <Label className="!text-ink">Assessor&apos;s note</Label>
         </div>
-      </motion.div>
+        <p className="p-4 text-[15px] leading-relaxed text-ink sm:p-5">{summary}</p>
+      </motion.section>
 
-      {/* ── Trending Indicator ──────────────────────────────────────────── */}
-      <motion.div
+      <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.8 }}
-        className="flex items-center justify-center gap-2 text-xs text-slate-500"
+        transition={{ delay: 0.8, duration: 0.4 }}
+        className="text-center"
       >
-        <TrendingUp className="w-3.5 h-3.5" />
-        <span>
-          Evaluated against {projectName}'s current requirements and team dynamics
-        </span>
-      </motion.div>
+        <Label className="!text-[10px]">
+          Marked against {projectName}&apos;s current requirements and team dynamics
+        </Label>
+      </motion.p>
 
       {/* ── Full Answers Toggle ─────────────────────────────────────────── */}
       {answers && answers.length > 0 && (
-        <div className="rounded-2xl border border-white/[0.04] overflow-hidden">
+        <section className="border border-ink/20 bg-paper-raised">
           <button
             onClick={() => setShowAnswers((p) => !p)}
-            className="w-full px-5 py-3.5 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+            className="flex w-full items-center justify-between gap-3 px-4 py-2.5 transition-colors hover:bg-paper-deep"
           >
-            <div className="flex items-center gap-2">
+            <span className="flex items-center gap-2">
               {showAnswers ? (
-                <EyeOff className="w-4 h-4 text-slate-500" />
+                <EyeOff size={13} className="text-graphite" />
               ) : (
-                <Eye className="w-4 h-4 text-slate-500" />
+                <Eye size={13} className="text-graphite" />
               )}
-              <span className="text-sm text-slate-400">
-                {showAnswers ? 'Hide' : 'View'} full answers
-              </span>
-            </div>
+              <Label className="!text-ink">
+                {showAnswers ? 'Hide' : 'View'} scripts as written
+              </Label>
+            </span>
             {showAnswers ? (
-              <ChevronUp className="w-4 h-4 text-slate-500" />
+              <ChevronUp size={14} className="text-graphite" />
             ) : (
-              <ChevronDown className="w-4 h-4 text-slate-500" />
+              <ChevronDown size={14} className="text-graphite" />
             )}
           </button>
 
@@ -247,25 +251,32 @@ export default function TeamLeadApplicantView({
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: 0.3, ease: EASE }}
                 className="overflow-hidden"
               >
-                <div className="px-5 pb-5 space-y-4 border-t border-white/[0.04] pt-4">
-                  {answers.map((a, i) => (
-                    <div key={i} className="space-y-1.5">
-                      <p className="text-xs text-slate-500 font-medium">
-                        Q{a.questionId}: {a.questionText || `Question ${a.questionId}`}
-                      </p>
-                      <p className="text-sm text-slate-300 bg-black/20 rounded-lg px-3 py-2 leading-relaxed">
-                        {a.answerText || '(No answer provided)'}
-                      </p>
-                    </div>
-                  ))}
+                <div className="border-t border-ink/20 px-4 py-4 sm:px-5">
+                  <ol className="border-t border-rule">
+                    {answers.map((a, i) => (
+                      <li key={i} className="border-b border-rule py-3">
+                        <div className="flex items-baseline gap-3">
+                          <Label className="w-7 shrink-0 !text-[10px]">
+                            {String(i + 1).padStart(2, '0')}
+                          </Label>
+                          <p className="flex-1 text-[13px] leading-relaxed text-graphite">
+                            {a.questionText || `Question ${a.questionId}`}
+                          </p>
+                        </div>
+                        <p className="mt-2 ml-10 border-l border-ink/20 pl-3 font-mono text-[13px] leading-relaxed text-ink">
+                          {a.answerText || '(No answer provided)'}
+                        </p>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </section>
       )}
     </motion.div>
   );
