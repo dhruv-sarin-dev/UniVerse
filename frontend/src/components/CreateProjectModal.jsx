@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 
+/**
+ * New project form, drawn as a requisition sheet. Behaviour is unchanged —
+ * same fields, same payload shape, same submit contract.
+ */
 export default function CreateProjectModal({ isOpen, onClose, onSubmit }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -13,12 +17,12 @@ export default function CreateProjectModal({ isOpen, onClose, onSubmit }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) return;
-    
+
     setIsSubmitting(true);
-    const skillArray = skills.split(',').map(s => s.trim()).filter(Boolean);
-    
+    const skillArray = skills.split(',').map((s) => s.trim()).filter(Boolean);
+
     await onSubmit({ title, description, category, required_skills: skillArray, members: [] });
-    
+
     setIsSubmitting(false);
     setTitle('');
     setDescription('');
@@ -27,42 +31,57 @@ export default function CreateProjectModal({ isOpen, onClose, onSubmit }) {
     onClose();
   };
 
+  const field =
+    'w-full border border-ink/25 bg-paper px-3 py-2.5 font-mono text-[13px] text-ink placeholder:text-graphite focus:border-blueprint focus:outline-none';
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
-      
-      <div className="relative bg-slate-900 border border-slate-700 w-full max-w-xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center p-6 border-b border-slate-800">
-          <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-blue-400">Launch a Project</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-2 rounded-full hover:bg-slate-800 transition-colors">
-            <X size={20} />
+    <div className="fm-scope fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/50 backdrop-blur-[2px]" onClick={onClose} />
+
+      <div className="relative w-full max-w-xl border border-ink bg-paper-raised shadow-2xl">
+        <div className="flex items-baseline justify-between border-b border-ink px-5 py-3">
+          <span className="fm-label !text-ink">Requisition — new project</span>
+          <button
+            onClick={onClose}
+            className="text-graphite transition-colors hover:text-signal"
+            aria-label="Close"
+          >
+            <X size={18} />
           </button>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+        <form onSubmit={handleSubmit} className="space-y-5 p-5">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Project Name</label>
-            <input 
-              type="text" required value={title} onChange={(e) => setTitle(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500/50"
-              placeholder="e.g. AI Financial Advisor"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Project Description & Pitch</label>
-            <textarea 
-              required rows={4} value={description} onChange={(e) => setDescription(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500/50 resize-none"
-              placeholder="Explain what you are building and why..."
+            <label htmlFor="proj-title" className="fm-label mb-1.5 block text-graphite">
+              Project name
+            </label>
+            <input
+              id="proj-title" type="text" required value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={field} placeholder="AI financial advisor"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Project Category</label>
-            <select 
-              value={category} onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500/50 cursor-pointer appearance-none"
+            <label htmlFor="proj-desc" className="fm-label mb-1.5 block text-graphite">
+              Brief
+            </label>
+            <textarea
+              id="proj-desc" required rows={4} value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className={`${field} resize-none`}
+              placeholder="What you are building, and why it is worth building."
+            />
+          </div>
+
+          <div>
+            <label htmlFor="proj-cat" className="fm-label mb-1.5 block text-graphite">
+              Category
+            </label>
+            <select
+              id="proj-cat" value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className={`${field} cursor-pointer`}
             >
               <option value="Web">Web</option>
               <option value="Mobile App">Mobile App</option>
@@ -73,20 +92,29 @@ export default function CreateProjectModal({ isOpen, onClose, onSubmit }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Required Skills (comma separated)</label>
-            <input 
-              type="text" value={skills} onChange={(e) => setSkills(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500/50"
-              placeholder="React, Machine Learning, UI Design..."
+            <label htmlFor="proj-skills" className="fm-label mb-1.5 block text-graphite">
+              Skills needed <span className="normal-case tracking-normal">(comma separated)</span>
+            </label>
+            <input
+              id="proj-skills" type="text" value={skills}
+              onChange={(e) => setSkills(e.target.value)}
+              className={field} placeholder="React, Machine Learning, UI Design"
             />
           </div>
 
-          <div className="pt-4 flex justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 transition-colors">
+          <div className="flex justify-end gap-3 border-t border-rule pt-4">
+            <button
+              type="button" onClick={onClose}
+              className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-graphite transition-colors hover:text-ink"
+            >
               Cancel
             </button>
-            <button type="submit" disabled={isSubmitting} className="bg-gradient-to-r from-teal-600 to-blue-600 text-white px-8 py-2.5 rounded-lg text-sm font-bold hover:shadow-[0_0_15px_rgba(20,184,166,0.5)] transition-all disabled:opacity-50">
-              {isSubmitting ? 'Launching...' : 'Submit Project'}
+            <button
+              type="submit" disabled={isSubmitting}
+              className="group relative overflow-hidden bg-ink px-6 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-paper disabled:opacity-50"
+            >
+              <span className="absolute inset-0 origin-left scale-x-0 bg-blueprint transition-transform duration-300 ease-out group-hover:scale-x-100" />
+              <span className="relative">{isSubmitting ? 'Filing…' : 'File project'}</span>
             </button>
           </div>
         </form>

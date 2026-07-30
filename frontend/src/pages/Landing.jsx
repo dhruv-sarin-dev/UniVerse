@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { motion, useMotionValue, useTransform, animate, useScroll, useSpring } from 'framer-motion';
+import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 
@@ -349,19 +349,9 @@ function SpecSection({ section, index }) {
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { scrollYProgress } = useScroll();
-  // Spring so the ruler tracks the scroll rather than snapping to it.
-  const progress = useSpring(scrollYProgress, { stiffness: 120, damping: 30, mass: 0.4 });
 
   return (
     <div className="fm-scope fm-paper relative min-h-screen font-sans text-ink">
-      {/* Reading position, drawn as a ruler along the sheet edge. */}
-      <motion.div
-        style={{ scaleX: progress }}
-        className="fixed left-0 top-0 z-40 h-[3px] w-full origin-left bg-signal"
-        aria-hidden="true"
-      />
-
       <div className="fm-crop relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
         {/* ── Cover ─────────────────────────────────────────────────── */}
         <header className="pt-24 pb-10 sm:pt-32 sm:pb-14">
