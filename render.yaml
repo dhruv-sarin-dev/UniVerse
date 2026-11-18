@@ -46,7 +46,6 @@ services:
   - type: web
     name: uni-verse-frontend
     runtime: static
-    plan: free
     rootDir: frontend
     branch: main
     autoDeploy: true
