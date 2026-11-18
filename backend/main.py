@@ -48,3 +48,10 @@ app.include_router(compatibility_exam.router)
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Uni-Verse API!"}
+
+# ponytail: liveness only. No Firebase/Groq calls here, so a slow upstream
+# can't make Render think the service is down. Add dependency checks only if
+# a real failure mode shows up.
+@app.get("/health")
+def health():
+    return {"status": "ok"}
