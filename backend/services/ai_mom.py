@@ -86,7 +86,7 @@ def generate_mom_from_transcripts(transcripts: list) -> str:
                 {"role": "system", "content": "You are a professional scribe generating Markdown meeting minutes. Output ONLY markdown, no conversational fillers."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             temperature=0.5
 
         )

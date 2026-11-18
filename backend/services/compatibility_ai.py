@@ -149,7 +149,7 @@ TASK: Perform a gap analysis between the project's needs and the applicant's pro
                 {"role": "system", "content": EXAM_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             temperature=0.4,
             max_tokens=1200,
         )
@@ -257,7 +257,7 @@ TASK: Evaluate these answers strictly on COMPATIBILITY with this specific projec
                 {"role": "system", "content": EVAL_SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             temperature=0.3,
             max_tokens=600,
         )

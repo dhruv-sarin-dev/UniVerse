@@ -92,7 +92,7 @@ def calculate_match_score(student_profile: dict, project_context: dict) -> dict:
                  {"role": "system", "content": "You are a Semantic Matchmaker AI. Respond ONLY with a raw JSON object with keys 'score' (integer) and 'reason' (string)."},
                 {"role": "user", "content": prompt}
             ],
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             temperature=0.3
         )
         
