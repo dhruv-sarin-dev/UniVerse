@@ -39,8 +39,7 @@ services:
       # Comma-separated. Defaults to * — set this to the real frontend origin
       # once the URL is known.
       - key: ALLOWED_ORIGINS
-        sync: false
-        description: "e.g. https://uni-verse.vercel.app"
+        value: https://uni-verse-frontend.onrender.com
 
   # Frontend (React/Vite)
   - type: web
