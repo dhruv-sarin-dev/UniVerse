@@ -7,8 +7,11 @@ services:
     env: python
     plan: free
     rootDir: backend
+    branch: main
+    autoDeploy: true
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
     secretFiles:
       - key: service-account.json
         path: /etc/secrets/service-account.json
@@ -45,6 +48,8 @@ services:
     env: static
     plan: free
     rootDir: frontend
+    branch: main
+    autoDeploy: true
     buildCommand: npm install && npm run build
     publishDir: dist
     envVars:
