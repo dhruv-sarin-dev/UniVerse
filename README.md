@@ -9,7 +9,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react)](https://react.dev)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?style=flat-square&logo=firebase)](https://firebase.google.com)
-[![Groq](https://img.shields.io/badge/Groq-Llama--3.3-FF6B35?style=flat-square)](https://console.groq.com)
+[![Groq](https://img.shields.io/badge/Groq-GPT--OSS--120B-FF6B35?style=flat-square)](https://console.groq.com)
 [![WebRTC](https://img.shields.io/badge/WebRTC-P2P%20Video-333333?style=flat-square&logo=webrtc)](https://webrtc.org)
 [![PWA](https://img.shields.io/badge/PWA-Installable-5A0FC8?style=flat-square&logo=pwa)](https://web.dev/progressive-web-apps/)
 
@@ -35,7 +35,7 @@
 | **Project Dashboard** | Multi-tab layout with Overview, Discussion, War Room, Contributions, and Members panels |
 | **Full CRUD** | Create, read, update, and delete projects and community posts |
 
-### 🤖 AI-Powered Intelligence (Groq Llama-3.3)
+### 🤖 AI-Powered Intelligence (Groq GPT-OSS-120B)
 | Feature | Description |
 |---|---|
 | **Skill Matchmaking** | AI scores your skills against a project's requirements with a detailed compatibility breakdown |
@@ -127,7 +127,7 @@ Uni-Verse/
     ├── routers/             # projects, community, communities, users,
     │                        # chat, vetting, presence, compatibility_exam
     ├── services/
-    │   ├── ai_matcher.py    # Groq Llama-3.3 skill matching
+    │   ├── ai_matcher.py    # Groq GPT-OSS-120B skill matching
     │   ├── ai_mom.py        # AI meeting minutes generator
     │   ├── ast_engine.py    # Tree-sitter AST code scorer
     │   ├── compatibility_ai.py  # Exam generation & evaluation
@@ -317,20 +317,23 @@ failing.
 
 ## 🚢 Deployment
 
-| Component | Platform | 
+| Component | Platform |
 |---|---|
-| Frontend | [Vercel](https://vercel.com) (free tier) |
-| Backend | [Render](https://render.com) (free tier) |
+| Frontend | [Render](https://render.com) static site (free tier) |
+| Backend | [Render](https://render.com) web service (free tier) |
 | Database | [Firebase Firestore](https://firebase.google.com) (managed) |
+
+Both services are defined in `render.yaml` (Blueprint) and track `main` with auto-deploy, so every merge to `main` redeploys them. Pushes to other branches don't deploy.
 
 **Backend (Render)**  
 - Runtime: Python 3 · Root Directory: `backend`  
 - Build: `pip install -r requirements.txt`  
 - Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- Health check: `GET /health` returns `{"status": "ok"}`
 
-**Frontend (Vercel)**  
-- Framework: Vite · Root Directory: `frontend`  
-- Build: `npm run build` · Output: `dist`
+**Frontend (Render static site)**  
+- Root Directory: `frontend` · Build: `npm install && npm run build` · Output: `dist`
+- `VITE_*` variables (Firebase, TURN) must be set in Render, since Vite bakes them in at build time.
 
 ---
 
