@@ -20,6 +20,13 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      // ponytail: Render's static host answers /index.html with 404 (only / works),
+      // so precaching it breaks the service worker install. Skip it; the page is
+      // served at / anyway. Offline navigation fallback is the cost.
+      workbox: {
+        globIgnores: ['**/index.html'],
+        navigateFallback: null,
+      },
       manifest: {
         name: 'Uni-Verse | Build the team before you build the project',
         short_name: 'Uni-Verse',
