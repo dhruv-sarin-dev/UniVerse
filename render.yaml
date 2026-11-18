@@ -12,13 +12,13 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    secretFiles:
-      - key: service-account.json
-        path: /etc/secrets/service-account.json
+    # service-account.json is NOT declared here: the Blueprint spec has no
+    # secretFiles field. Add it by hand after the first sync: service → Environment
+    # → Secret Files → filename service-account.json, path /etc/secrets/service-account.json.
     envVars:
       - key: GROQ_API_KEY
         sync: false
-        description: "API Key for Groq Llama3 modeling"
+        description: "API key for Groq (openai/gpt-oss-120b) AI features"
       - key: GITHUB_TOKEN
         sync: false
       - key: SMTP_USER
@@ -39,14 +39,12 @@ services:
       # Comma-separated. Defaults to * — set this to the real frontend origin
       # once the URL is known.
       - key: ALLOWED_ORIGINS
-        sync: false
-        description: "e.g. https://uni-verse.vercel.app"
+        value: https://uni-verse-frontend.onrender.com
 
   # Frontend (React/Vite)
   - type: web
     name: uni-verse-frontend
     runtime: static
-    plan: free
     rootDir: frontend
     branch: main
     autoDeploy: true
@@ -58,14 +56,12 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      # `property: host` yields a bare hostname with no scheme. src/api.js
-      # normalises that to https:// — without it, fetch builds a relative URL
-      # and `new WebSocket()` throws outright, taking the War Room down.
+      # Full URL, set explicitly. `fromService` with `property: host` returned a
+      # bare service name ("uni-verse-backend-tpst") without ".onrender.com", so
+      # every API and WebSocket call went to a host that does not exist.
+      # If the backend service is ever renamed or recreated, update this value.
       - key: VITE_API_URL
-        fromService:
-          type: web
-          name: uni-verse-backend
-          property: host
+        value: https://uni-verse-backend-tpst.onrender.com
       # Vite inlines these at build time, so they must exist here or the
       # deployed bundle ships with an unconfigured Firebase and silently
       # falls back to the mock login path.
