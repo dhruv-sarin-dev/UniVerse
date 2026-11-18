@@ -50,7 +50,7 @@ def evaluate_with_groq(project_details: dict, candidates: list) -> dict:
     
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "system", "content": "You are a professional project manager API. Output valid JSON only."},
                       {"role": "user", "content": prompt}],
             response_format={"type": "json_object"}
