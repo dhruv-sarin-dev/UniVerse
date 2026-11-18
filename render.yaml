@@ -12,13 +12,13 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    secretFiles:
-      - key: service-account.json
-        path: /etc/secrets/service-account.json
+    # service-account.json is NOT declared here: the Blueprint spec has no
+    # secretFiles field. Add it by hand after the first sync: service → Environment
+    # → Secret Files → filename service-account.json, path /etc/secrets/service-account.json.
     envVars:
       - key: GROQ_API_KEY
         sync: false
-        description: "API Key for Groq Llama3 modeling"
+        description: "API key for Groq (openai/gpt-oss-120b) AI features"
       - key: GITHUB_TOKEN
         sync: false
       - key: SMTP_USER
