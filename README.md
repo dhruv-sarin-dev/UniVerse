@@ -90,7 +90,7 @@
 | Feature | Description |
 |---|---|
 | **Applicant Review** | Accept or reject join requests with AI compatibility scores |
-| **Member Removal** | Project owners can remove underperforming members |
+| **Member Removal** | Project owners can remove underperforming team members |
 | **GitHub Analytics Intel** | Vet applicants by viewing their GitHub stats, stars, repos, and top languages |
 | **Email Notifications** | Optional SMTP notifications for team events (join requests, acceptances) |
 
