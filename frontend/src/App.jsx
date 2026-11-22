@@ -55,7 +55,7 @@ function AnimatedRoutes() {
     ? location.pathname.match(/^\/projects\/[^/]+/)[0]
     : location.pathname;
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence>
       <Routes location={location} key={routeKey}>
         <Route path="/" element={<Suspense fallback={<PageFallback />}><motion.div {...pageVariants}><Landing /></motion.div></Suspense>} />
         <Route path="/discover" element={<Suspense fallback={<PageFallback />}><motion.div {...pageVariants}><Discover /></motion.div></Suspense>} />
