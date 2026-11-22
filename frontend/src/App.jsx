@@ -61,7 +61,7 @@ function AnimatedRoutes() {
         <Route path="/discover" element={<Suspense fallback={<PageFallback />}><motion.div {...pageVariants}><Discover /></motion.div></Suspense>} />
         <Route path="/community" element={<Suspense fallback={<PageFallback />}><motion.div {...pageVariants}><Community /></motion.div></Suspense>} />
         <Route path="/onboarding" element={<Suspense fallback={<PageFallback />}><motion.div {...pageVariants}><Onboarding /></motion.div></Suspense>} />
-        <Route path="/projects/:id" element={<Suspense fallback={<PageFallback />}><motion.div {...pageVariants}><ProjectLayout /></motion.div></Suspense>}>
+        <Route path="/projects/:id" element={<Suspense fallback={<PageFallback />}><motion.div initial={false} animate={{ opacity: 1 }}><ProjectLayout /></motion.div></Suspense>}>
           <Route index element={<Overview />} />
           <Route path="discussion" element={<Discussion />} />
           <Route path="warroom" element={<WarRoom />} />
